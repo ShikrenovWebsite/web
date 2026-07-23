@@ -52,6 +52,18 @@ const githubOrganizationMembershipSchema = z.object({
   organization: githubOrganizationSchema,
 });
 
+const githubTreeSchema = z.object({
+  truncated: z.boolean().default(false),
+  tree: z.array(
+    z.object({
+      path: z.string(),
+      type: z.string(),
+      sha: z.string(),
+      size: z.number().int().nonnegative().nullable().optional(),
+    }),
+  ),
+});
+
 export type GitHubRepositorySource = z.infer<typeof githubRepositorySchema>;
 export type GitHubOrganizationSource = z.infer<
   typeof githubOrganizationSchema
@@ -239,30 +251,147 @@ export function createGitHubClient(token: string) {
       };
     },
 
-    async getReadmePreview(owner: string, repository: string) {
+    async getRepositoryContentInputs(
+      owner: string,
+      repository: string,
+      defaultBranch: string,
+    ) {
+      const treeResponse = await request(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
+      );
+      const tree = githubTreeSchema.parse(await treeResponse.json());
+      const relevantBasenames = new Set([
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "yarn.lock",
+        "bun.lock",
+        "bun.lockb",
+        "dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "compose.yml",
+        "compose.yaml",
+        "vercel.json",
+        "netlify.toml",
+        "render.yaml",
+        "render.yml",
+        "fly.toml",
+        "railway.json",
+        "wrangler.toml",
+        "wrangler.json",
+        "wrangler.jsonc",
+        "requirements.txt",
+        "pyproject.toml",
+        "go.mod",
+        "cargo.toml",
+        "composer.json",
+        "gemfile",
+        "schema.prisma",
+        ".gitlab-ci.yml",
+      ]);
+      const candidates = tree.tree
+        .filter((item) => {
+          if (item.type !== "blob") return false;
+          const lowerPath = item.path.toLowerCase();
+          const basename = lowerPath.split("/").at(-1) ?? lowerPath;
+          return (
+            relevantBasenames.has(basename) ||
+            lowerPath.startsWith(".github/workflows/") ||
+            lowerPath === ".circleci/config.yml" ||
+            basename.startsWith("dockerfile.")
+          );
+        })
+        .sort((left, right) => {
+          const leftDepth = left.path.split("/").length;
+          const rightDepth = right.path.split("/").length;
+          return leftDepth - rightDepth || left.path.localeCompare(right.path);
+        })
+        .slice(0, 40);
+
+      let totalBytes = 0;
+      const files: Array<{
+        path: string;
+        sha: string | null;
+        size: number | null;
+        content: string;
+      }> = [];
+      const warnings: string[] = [];
+      for (const candidate of candidates) {
+        const size = candidate.size ?? null;
+        if ((size ?? 0) > 250_000 || totalBytes + (size ?? 0) > 1_500_000) {
+          files.push({
+            path: candidate.path,
+            sha: candidate.sha,
+            size,
+            content: "",
+          });
+          continue;
+        }
+        try {
+          const response = await request(
+            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/contents/${candidate.path
+              .split("/")
+              .map(encodeURIComponent)
+              .join("/")}?ref=${encodeURIComponent(defaultBranch)}`,
+            "application/vnd.github.raw+json",
+          );
+          const content = (await response.text()).slice(0, 250_000);
+          totalBytes += Buffer.byteLength(content, "utf8");
+          files.push({
+            path: candidate.path,
+            sha: candidate.sha,
+            size,
+            content,
+          });
+        } catch (error) {
+          warnings.push(
+            `${candidate.path}: ${
+              error instanceof Error ? error.message : "could not be fetched"
+            }`,
+          );
+        }
+      }
+
+      return {
+        files,
+        warnings,
+        treeTruncated: tree.truncated,
+        treeEntries: tree.tree.length,
+      };
+    },
+
+    async getReadmeMarkdown(owner: string, repository: string) {
       try {
         const response = await request(
           `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/readme`,
           "application/vnd.github.raw+json",
         );
-        const text = await response.text();
         return {
-          preview: text.slice(0, 5000),
+          markdown: (await response.text()).slice(0, 100_000),
           warning: null,
         };
       } catch (error) {
         if (error instanceof GitHubApiError && error.status === 404) {
-          return { preview: null, warning: null };
+          return { markdown: null, warning: null };
         }
-
         return {
-          preview: null,
+          markdown: null,
           warning:
             error instanceof Error
               ? `README unavailable for ${owner}/${repository}: ${error.message}`
               : `README unavailable for ${owner}/${repository}.`,
         };
       }
+    },
+
+    async getReadmePreview(owner: string, repository: string) {
+      const result = await this.getReadmeMarkdown(owner, repository);
+      return {
+        preview: result.markdown?.slice(0, 5000) ?? null,
+        warning: result.warning,
+      };
     },
   };
 }

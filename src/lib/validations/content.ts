@@ -104,6 +104,7 @@ export const projectSchema = z
     technologiesText: optionalText(2000),
     liveUrl: urlText,
     sourceCodeUrl: urlText,
+    coverImageUrl: urlText,
     startDate: dateText,
     endDate: dateText,
     featured: z.boolean(),

@@ -16,7 +16,12 @@ export const githubProjectFieldSchema = repositoryIdSchema.extend({
     "technologies",
     "liveUrl",
     "sourceCodeUrl",
+    "coverImageUrl",
   ]),
+});
+
+export const githubCoverImageSchema = repositoryIdSchema.extend({
+  url: z.string().url().max(2000),
 });
 
 export const unavailableRepositoryActionSchema = repositoryIdSchema.extend({

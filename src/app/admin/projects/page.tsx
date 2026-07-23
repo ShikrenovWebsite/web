@@ -64,6 +64,7 @@ export default async function ProjectsPage() {
               technologiesText: item.technologies.join(", "),
               liveUrl: item.liveUrl ?? "",
               sourceCodeUrl: item.sourceCodeUrl ?? "",
+              coverImageUrl: item.coverImageUrl ?? "",
               startDate: dateInput(item.startDate),
               endDate: dateInput(item.endDate),
               featured: item.featured,

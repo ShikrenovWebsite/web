@@ -13,6 +13,10 @@ import {
   mergeRepositoriesByGithubId,
   type GitHubOwnerPreference,
 } from "@/lib/github/owners";
+import {
+  analyzeRepositoryContents,
+  GITHUB_ENRICHMENT_VERSION,
+} from "@/lib/github/enrichment";
 import { decryptGitHubToken } from "@/lib/github/token";
 
 const authoredSourceFields = [
@@ -624,6 +628,19 @@ export async function synchronizeGitHubRepositories(
       fieldsChanged: string[];
       unavailableReason: string | null;
       readmePreview: string | null;
+      readmeMarkdown: string | null;
+      readmeImages: Prisma.InputJsonValue | null;
+      sourceFilesSnapshot: Prisma.InputJsonValue | null;
+      enrichmentSnapshot: Prisma.InputJsonValue | null;
+      enrichmentFingerprint: string | null;
+      enrichmentVersion: number;
+      enrichmentError: string | null;
+      detectedTechnologies: string[];
+      suggestedTitle: string | null;
+      suggestedShortDescription: string | null;
+      suggestedLongDescription: string | null;
+      suggestedCoverImageUrl: string | null;
+      enrichedAt: Date | null;
     }> = [];
 
     for (const source of sourceRepositories) {
@@ -648,21 +665,149 @@ export async function synchronizeGitHubRepositories(
       }
 
       const previous = existing ? previousSnapshot(existing) : null;
-      const fieldsChanged = changedFields(previous, snapshot);
+      const fieldsChanged: string[] = changedFields(previous, snapshot);
       let readmePreview = existing?.readmePreview ?? null;
+      let readmeMarkdown = existing?.readmeMarkdown ?? null;
+      let readmeImages =
+        (existing?.readmeImages as Prisma.InputJsonValue | null | undefined) ??
+        null;
+      let sourceFilesSnapshot =
+        (existing?.sourceFilesSnapshot as
+          | Prisma.InputJsonValue
+          | null
+          | undefined) ?? null;
+      let enrichmentSnapshot =
+        (existing?.enrichmentSnapshot as
+          | Prisma.InputJsonValue
+          | null
+          | undefined) ?? null;
+      let enrichmentFingerprint = existing?.enrichmentFingerprint ?? null;
+      let enrichmentVersion = existing?.enrichmentVersion ?? 0;
+      let enrichmentError: string | null =
+        existing?.enrichmentError ?? null;
+      let detectedTechnologies = existing?.detectedTechnologies ?? [];
+      let suggestedTitle = existing?.suggestedTitle ?? null;
+      let suggestedShortDescription =
+        existing?.suggestedShortDescription ?? null;
+      let suggestedLongDescription =
+        existing?.suggestedLongDescription ?? null;
+      let suggestedCoverImageUrl =
+        existing?.suggestedCoverImageUrl ?? null;
+      let enrichedAt = existing?.enrichedAt ?? null;
 
-      if (
+      const shouldEnrich =
         !unavailableReason &&
         (!existing ||
-          existing.githubUpdatedAt?.getTime() !==
-            date(snapshot.githubUpdatedAt)?.getTime())
-      ) {
-        const readme = await client.getReadmePreview(
+          existing.enrichmentVersion < GITHUB_ENRICHMENT_VERSION ||
+          !existing.enrichmentFingerprint ||
+          existing.githubPushedAt?.getTime() !==
+            date(snapshot.githubPushedAt)?.getTime());
+
+      if (shouldEnrich) {
+        enrichmentError = null;
+        const readme = await client.getReadmeMarkdown(
           snapshot.ownerLogin,
           snapshot.name,
         );
-        readmePreview = readme.preview;
+        if (!readme.warning) {
+          readmeMarkdown = readme.markdown;
+          readmePreview = readme.markdown?.slice(0, 5000) ?? null;
+        }
         if (readme.warning) warnings.push(readme.warning);
+        try {
+          const content = snapshot.defaultBranch
+            ? await client.getRepositoryContentInputs(
+                snapshot.ownerLogin,
+                snapshot.name,
+                snapshot.defaultBranch,
+              )
+            : {
+                files: [],
+                warnings: ["Repository has no default branch."],
+                treeTruncated: false,
+                treeEntries: 0,
+              };
+          warnings.push(
+            ...content.warnings.map(
+              (warning) => `${snapshot.fullName}: ${warning}`,
+            ),
+          );
+          if (content.treeTruncated) {
+            warnings.push(
+              `${snapshot.fullName}: GitHub returned a truncated repository tree; enrichment used the available files.`,
+            );
+          }
+          const enrichment = analyzeRepositoryContents({
+            context: {
+              owner: snapshot.ownerLogin,
+              name: snapshot.name,
+              defaultBranch: snapshot.defaultBranch ?? "main",
+              description: snapshot.description,
+              primaryLanguage: snapshot.primaryLanguage,
+              topics: snapshot.topics,
+            },
+            files: content.files,
+            readmeMarkdown,
+          });
+          const previousSuggestions = {
+            suggestedTitle: existing?.suggestedTitle ?? null,
+            suggestedShortDescription:
+              existing?.suggestedShortDescription ?? null,
+            suggestedLongDescription:
+              existing?.suggestedLongDescription ?? null,
+            detectedTechnologies: existing?.detectedTechnologies ?? [],
+            suggestedCoverImageUrl:
+              existing?.suggestedCoverImageUrl ?? null,
+          };
+          const nextSuggestions = {
+            suggestedTitle: enrichment.suggestions.title,
+            suggestedShortDescription:
+              enrichment.suggestions.shortDescription,
+            suggestedLongDescription:
+              enrichment.suggestions.longDescription,
+            detectedTechnologies: enrichment.detectedTechnologies,
+            suggestedCoverImageUrl:
+              enrichment.suggestions.coverImageUrl,
+          };
+          if (existing) {
+            for (const field of Object.keys(
+              nextSuggestions,
+            ) as Array<keyof typeof nextSuggestions>) {
+              if (
+                JSON.stringify(previousSuggestions[field]) !==
+                JSON.stringify(nextSuggestions[field])
+              ) {
+                fieldsChanged.push(field);
+              }
+            }
+          }
+          readmeImages =
+            enrichment.readmeImages as unknown as Prisma.InputJsonValue;
+          sourceFilesSnapshot = {
+            files: enrichment.sourceFiles,
+            treeEntries: content.treeEntries,
+            treeTruncated: content.treeTruncated,
+          };
+          enrichmentSnapshot =
+            enrichment.snapshot as unknown as Prisma.InputJsonValue;
+          enrichmentFingerprint = enrichment.fingerprint;
+          enrichmentVersion = enrichment.version;
+          detectedTechnologies = enrichment.detectedTechnologies;
+          suggestedTitle = enrichment.suggestions.title;
+          suggestedShortDescription =
+            enrichment.suggestions.shortDescription;
+          suggestedLongDescription =
+            enrichment.suggestions.longDescription;
+          suggestedCoverImageUrl =
+            enrichment.suggestions.coverImageUrl;
+          enrichedAt = new Date();
+        } catch (error) {
+          enrichmentError =
+            error instanceof Error
+              ? error.message
+              : "Repository content enrichment failed.";
+          warnings.push(`${snapshot.fullName}: ${enrichmentError}`);
+        }
       }
 
       prepared.push({
@@ -671,6 +816,19 @@ export async function synchronizeGitHubRepositories(
         fieldsChanged,
         unavailableReason,
         readmePreview,
+        readmeMarkdown,
+        readmeImages,
+        sourceFilesSnapshot,
+        enrichmentSnapshot,
+        enrichmentFingerprint,
+        enrichmentVersion,
+        enrichmentError,
+        detectedTechnologies,
+        suggestedTitle,
+        suggestedShortDescription,
+        suggestedLongDescription,
+        suggestedCoverImageUrl,
+        enrichedAt,
       });
     }
 
@@ -800,6 +958,25 @@ export async function synchronizeGitHubRepositories(
             isTemplate: snapshot.isTemplate,
             defaultBranch: snapshot.defaultBranch,
             readmePreview: item.readmePreview,
+            readmeMarkdown: item.readmeMarkdown,
+            readmeImages:
+              item.readmeImages ?? Prisma.JsonNull,
+            sourceFilesSnapshot:
+              item.sourceFilesSnapshot ?? Prisma.JsonNull,
+            enrichmentSnapshot:
+              item.enrichmentSnapshot ?? Prisma.JsonNull,
+            enrichmentFingerprint: item.enrichmentFingerprint,
+            enrichmentVersion: item.enrichmentVersion,
+            enrichmentError: item.enrichmentError,
+            detectedTechnologies: item.detectedTechnologies,
+            suggestedTitle: item.suggestedTitle,
+            suggestedShortDescription:
+              item.suggestedShortDescription,
+            suggestedLongDescription:
+              item.suggestedLongDescription,
+            suggestedCoverImageUrl:
+              item.suggestedCoverImageUrl,
+            enrichedAt: item.enrichedAt,
             githubCreatedAt: date(snapshot.githubCreatedAt),
             githubUpdatedAt: date(snapshot.githubUpdatedAt),
             githubPushedAt: date(snapshot.githubPushedAt),
@@ -833,6 +1010,25 @@ export async function synchronizeGitHubRepositories(
             isTemplate: snapshot.isTemplate,
             defaultBranch: snapshot.defaultBranch,
             readmePreview: item.readmePreview,
+            readmeMarkdown: item.readmeMarkdown,
+            readmeImages:
+              item.readmeImages ?? Prisma.JsonNull,
+            sourceFilesSnapshot:
+              item.sourceFilesSnapshot ?? Prisma.JsonNull,
+            enrichmentSnapshot:
+              item.enrichmentSnapshot ?? Prisma.JsonNull,
+            enrichmentFingerprint: item.enrichmentFingerprint,
+            enrichmentVersion: item.enrichmentVersion,
+            enrichmentError: item.enrichmentError,
+            detectedTechnologies: item.detectedTechnologies,
+            suggestedTitle: item.suggestedTitle,
+            suggestedShortDescription:
+              item.suggestedShortDescription,
+            suggestedLongDescription:
+              item.suggestedLongDescription,
+            suggestedCoverImageUrl:
+              item.suggestedCoverImageUrl,
+            enrichedAt: item.enrichedAt,
             githubCreatedAt: date(snapshot.githubCreatedAt),
             githubUpdatedAt: date(snapshot.githubUpdatedAt),
             githubPushedAt: date(snapshot.githubPushedAt),

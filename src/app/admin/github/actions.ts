@@ -19,6 +19,7 @@ import { db } from "@/lib/db";
 import { getServerEnv } from "@/lib/env";
 import {
   githubProjectFieldSchema,
+  githubCoverImageSchema,
   githubAccessTestSchema,
   organizationOwnerPreferenceSchema,
   repositoryIdSchema,
@@ -496,22 +497,26 @@ export async function addRepositoryToPortfolio(
         orderBy: { displayOrder: "desc" },
         select: { displayOrder: true },
       });
-      const technologies = [
-        repository.primaryLanguage,
-        ...repository.topics,
-      ].filter((value): value is string => Boolean(value));
+      const technologies = repository.detectedTechnologies.length
+        ? repository.detectedTechnologies
+        : [repository.primaryLanguage, ...repository.topics].filter(
+            (value): value is string => Boolean(value),
+          );
 
       await transaction.portfolioProject.create({
         data: {
           userId: admin.id,
           githubRepositoryId: repository.id,
-          title: repository.name,
+          title: repository.suggestedTitle ?? repository.name,
           slug,
-          shortDescription: repository.description,
-          longDescription: repository.readmePreview,
+          shortDescription:
+            repository.suggestedShortDescription ?? repository.description,
+          longDescription:
+            repository.suggestedLongDescription ?? repository.description,
           technologies: [...new Set(technologies)],
           liveUrl: repository.homepageUrl,
           sourceCodeUrl: repository.githubUrl,
+          coverImageUrl: repository.suggestedCoverImageUrl,
           sourceType: "GITHUB",
           sourceReferenceId: repository.githubRepositoryId,
           status: "DRAFT",
@@ -560,17 +565,21 @@ export async function applyGitHubProjectField(
     return { success: false, message: "Linked portfolio project not found." };
   }
 
-  const technologies = [
-    repository.primaryLanguage,
-    ...repository.topics,
-  ].filter((value): value is string => Boolean(value));
+  const technologies = repository.detectedTechnologies.length
+    ? repository.detectedTechnologies
+    : [repository.primaryLanguage, ...repository.topics].filter(
+        (value): value is string => Boolean(value),
+      );
   const values = {
-    title: repository.name,
-    shortDescription: repository.description,
-    longDescription: repository.readmePreview,
+    title: repository.suggestedTitle ?? repository.name,
+    shortDescription:
+      repository.suggestedShortDescription ?? repository.description,
+    longDescription:
+      repository.suggestedLongDescription ?? repository.description,
     technologies: [...new Set(technologies)],
     liveUrl: repository.homepageUrl,
     sourceCodeUrl: repository.githubUrl,
+    coverImageUrl: repository.suggestedCoverImageUrl,
   };
 
   await db.portfolioProject.update({
@@ -584,6 +593,53 @@ export async function applyGitHubProjectField(
   return {
     success: true,
     message: "GitHub value applied. Publication settings were unchanged.",
+  };
+}
+
+export async function applyGitHubCoverImage(
+  input: unknown,
+): Promise<GitHubActionResult> {
+  const { admin } = await requireAdminPage("/admin/github");
+  const parsed = githubCoverImageSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "Invalid README image selection." };
+  }
+
+  const repository = await db.gitHubRepository.findFirst({
+    where: {
+      id: parsed.data.repositoryId,
+      connection: { userId: admin.id },
+    },
+    include: { project: true },
+  });
+  if (!repository?.project) {
+    return { success: false, message: "Linked portfolio project not found." };
+  }
+  const images = Array.isArray(repository.readmeImages)
+    ? repository.readmeImages
+    : [];
+  const isSuggestedImage = images.some(
+    (image) =>
+      typeof image === "object" &&
+      image !== null &&
+      "url" in image &&
+      image.url === parsed.data.url,
+  );
+  if (!isSuggestedImage) {
+    return {
+      success: false,
+      message: "That image is not part of the stored README suggestions.",
+    };
+  }
+
+  await db.portfolioProject.update({
+    where: { id: repository.project.id },
+    data: { coverImageUrl: parsed.data.url },
+  });
+  revalidateGitHub();
+  return {
+    success: true,
+    message: "README image applied as the project cover.",
   };
 }
 

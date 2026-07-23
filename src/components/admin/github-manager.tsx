@@ -6,9 +6,11 @@ import {
   ExternalLink,
   GitBranch,
   GitFork,
+  ImageIcon,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   Star,
   Unplug,
 } from "lucide-react";
@@ -19,6 +21,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   addRepositoryToPortfolio,
+  applyGitHubCoverImage,
   applyGitHubProjectField,
   connectGitHubAccount,
   finishRepositoryChangeReview,
@@ -30,6 +33,7 @@ import {
   type GitHubActionResult,
 } from "@/app/admin/github/actions";
 import { EmptyState } from "@/components/admin/empty-state";
+import { SafeReadme } from "@/components/admin/safe-readme";
 import { SectionHeading } from "@/components/admin/section-heading";
 import {
   AlertDialog,
@@ -72,6 +76,7 @@ type Project = {
   technologies: string[];
   liveUrl: string | null;
   sourceCodeUrl: string | null;
+  coverImageUrl: string | null;
   status: "DRAFT" | "PUBLISHED" | "HIDDEN";
   featured: boolean;
   displayOrder: number;
@@ -97,6 +102,19 @@ type Repository = {
   isTemplate: boolean;
   defaultBranch: string | null;
   readmePreview: string | null;
+  readmeMarkdown: string | null;
+  readmeImages: Array<{ url: string; alt: string; source: string }>;
+  sourceFiles: string[];
+  enrichmentCategories: Array<{ label: string; technologies: string[] }>;
+  enrichmentVersion: number;
+  enrichmentError: string | null;
+  detectedTechnologies: string[];
+  suggestedTitle: string | null;
+  suggestedShortDescription: string | null;
+  suggestedLongDescription: string | null;
+  suggestedCoverImageUrl: string | null;
+  enrichedAt: string | null;
+  enrichedAtLabel: string;
   githubUpdatedAt: string | null;
   githubUpdatedAtLabel: string;
   githubPushedAt: string | null;
@@ -250,6 +268,8 @@ function SourceBadges({ repository }: { repository: Repository }) {
 }
 
 function RepositoryBody({ repository }: { repository: Repository }) {
+  const { isPending, run } = useGitHubAction();
+
   return (
     <CardContent className="space-y-4">
       <RepositoryMetadata repository={repository} />
@@ -260,14 +280,149 @@ function RepositoryBody({ repository }: { repository: Repository }) {
           ))}
         </div>
       ) : null}
-      {repository.readmePreview ? (
+      {repository.enrichmentVersion > 0 ? (
+        <div className="space-y-3 rounded-lg border border-violet-200 bg-violet-50/50 p-4">
+          <div className="flex items-start gap-2">
+            <Sparkles
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-violet-700"
+            />
+            <div>
+              <p className="text-sm font-medium">Portfolio suggestions</p>
+              <p className="text-xs text-muted-foreground">
+                Generated from immutable GitHub source files. Applying a
+                suggestion is explicit; future syncs do not overwrite editable
+                project fields.
+              </p>
+            </div>
+          </div>
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">Suggested title</dt>
+              <dd className="mt-1 font-medium">
+                {repository.suggestedTitle || "No suggestion"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Enriched</dt>
+              <dd className="mt-1 font-medium">{repository.enrichedAtLabel}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                Suggested summary
+              </dt>
+              <dd className="mt-1 whitespace-pre-wrap">
+                {repository.suggestedShortDescription || "No suggestion"}
+              </dd>
+            </div>
+          </dl>
+          {repository.detectedTechnologies.length ? (
+            <div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Detected technologies
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {repository.detectedTechnologies.map((technology) => (
+                  <Badge key={technology}>{technology}</Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {repository.enrichmentCategories.length ? (
+            <details className="text-sm">
+              <summary className="cursor-pointer font-medium">
+                Detection details
+              </summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {repository.enrichmentCategories.map((category) => (
+                  <div key={category.label}>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {category.label.replace(/([A-Z])/g, " $1")}
+                    </p>
+                    <p className="mt-1">{category.technologies.join(", ")}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+          {repository.sourceFiles.length ? (
+            <details className="text-sm">
+              <summary className="cursor-pointer font-medium">
+                Source evidence ({repository.sourceFiles.length} files)
+              </summary>
+              <ul className="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
+                {repository.sourceFiles.map((path) => (
+                  <li className="break-all" key={path}>
+                    {path}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      {repository.enrichmentError ? (
+        <div
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+          role="alert"
+        >
+          Repository content could not be fully analyzed:{" "}
+          {repository.enrichmentError}
+        </div>
+      ) : null}
+      {repository.readmeImages.length ? (
+        <details className="rounded-lg border p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Suggested README covers ({repository.readmeImages.length})
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {repository.readmeImages.map((image) => (
+              <div className="overflow-hidden rounded-lg border" key={image.url}>
+                <span
+                  aria-label={image.alt}
+                  className="block aspect-video bg-muted bg-contain bg-center bg-no-repeat"
+                  role="img"
+                  style={{ backgroundImage: `url("${image.url}")` }}
+                />
+                <div className="space-y-2 p-3">
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {image.alt}
+                  </p>
+                  {repository.project ? (
+                    <Button
+                      disabled={isPending}
+                      onClick={() =>
+                        run(() =>
+                          applyGitHubCoverImage({
+                            repositoryId: repository.id,
+                            imageUrl: image.url,
+                          }),
+                        )
+                      }
+                      size="sm"
+                      variant="outline"
+                    >
+                      <ImageIcon aria-hidden="true" className="size-4" />
+                      Use as cover
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+      {repository.readmeMarkdown ? (
         <details className="rounded-lg border bg-muted/30 p-3">
           <summary className="cursor-pointer text-sm font-medium">
             README preview
           </summary>
-          <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">
-            {repository.readmePreview}
-          </pre>
+          <div className="mt-3 max-h-96 overflow-auto">
+            <SafeReadme
+              markdown={repository.readmeMarkdown}
+              repositoryUrl={repository.githubUrl}
+            />
+          </div>
         </details>
       ) : null}
     </CardContent>
@@ -598,41 +753,63 @@ const comparisonFields = [
   {
     key: "title" as const,
     label: "Title",
+    sourceFields: ["name", "suggestedTitle"],
     current: (project: Project) => project.title,
-    incoming: (repository: Repository) => repository.name,
+    incoming: (repository: Repository) =>
+      repository.suggestedTitle ?? repository.name,
   },
   {
     key: "shortDescription" as const,
     label: "Short description",
+    sourceFields: ["description", "suggestedShortDescription"],
     current: (project: Project) => project.shortDescription,
-    incoming: (repository: Repository) => repository.description,
+    incoming: (repository: Repository) =>
+      repository.suggestedShortDescription ?? repository.description,
   },
   {
     key: "longDescription" as const,
     label: "Long description",
+    sourceFields: ["readmeMarkdown", "suggestedLongDescription"],
     current: (project: Project) => project.longDescription,
-    incoming: (repository: Repository) => repository.readmePreview,
+    incoming: (repository: Repository) =>
+      repository.suggestedLongDescription ?? repository.readmePreview,
   },
   {
     key: "technologies" as const,
     label: "Technologies",
+    sourceFields: [
+      "detectedTechnologies",
+      "topics",
+      "primaryLanguage",
+    ],
     current: (project: Project) => project.technologies.join(", "),
     incoming: (repository: Repository) =>
-      [repository.primaryLanguage, ...repository.topics]
-        .filter(Boolean)
-        .join(", "),
+      repository.detectedTechnologies.length
+        ? repository.detectedTechnologies.join(", ")
+        : [repository.primaryLanguage, ...repository.topics]
+            .filter(Boolean)
+            .join(", "),
   },
   {
     key: "liveUrl" as const,
     label: "Live URL",
+    sourceFields: ["homepageUrl"],
     current: (project: Project) => project.liveUrl,
     incoming: (repository: Repository) => repository.homepageUrl,
   },
   {
     key: "sourceCodeUrl" as const,
     label: "Source URL",
+    sourceFields: ["githubUrl"],
     current: (project: Project) => project.sourceCodeUrl,
     incoming: (repository: Repository) => repository.githubUrl,
+  },
+  {
+    key: "coverImageUrl" as const,
+    label: "Cover image",
+    sourceFields: ["suggestedCoverImageUrl"],
+    current: (project: Project) => project.coverImageUrl,
+    incoming: (repository: Repository) => repository.suggestedCoverImageUrl,
   },
 ];
 
@@ -640,19 +817,10 @@ function ChangeReview({ repository }: { repository: Repository }) {
   const { isPending, run } = useGitHubAction();
   if (!repository.project) return null;
 
-  const visibleFields = comparisonFields.filter(
-    (field) =>
-      repository.pendingChanges.includes(
-        field.key === "shortDescription"
-          ? "description"
-          : field.key === "liveUrl"
-            ? "homepageUrl"
-            : field.key === "technologies"
-              ? "topics"
-              : field.key,
-      ) ||
-      (field.key === "technologies" &&
-        repository.pendingChanges.includes("primaryLanguage")),
+  const visibleFields = comparisonFields.filter((field) =>
+    field.sourceFields.some((sourceField) =>
+      repository.pendingChanges.includes(sourceField),
+    ),
   );
 
   return (

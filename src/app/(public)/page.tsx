@@ -177,7 +177,17 @@ export default async function HomePage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {portfolio?.projects.length ? (
               portfolio.projects.map((project) => (
-                <Card key={project.id}>
+                <Card className="overflow-hidden" key={project.id}>
+                  {project.coverImageUrl ? (
+                    <div
+                      aria-label={`${project.title} cover`}
+                      className="aspect-video w-full border-b bg-muted bg-cover bg-center"
+                      role="img"
+                      style={{
+                        backgroundImage: `url("${project.coverImageUrl}")`,
+                      }}
+                    />
+                  ) : null}
                   <CardHeader>
                     <div className="flex items-start justify-between gap-4">
                       <CardTitle>{project.title}</CardTitle>

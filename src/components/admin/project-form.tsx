@@ -38,6 +38,7 @@ const emptyProject: ProjectInput = {
   technologiesText: "",
   liveUrl: "",
   sourceCodeUrl: "",
+  coverImageUrl: "",
   startDate: "",
   endDate: "",
   featured: false,
@@ -113,6 +114,20 @@ export function ProjectForm({
               <Input
                 id={`project-title-${value.id ?? "new"}`}
                 {...form.register("title")}
+              />
+            </FormField>
+            <FormField
+              className="sm:col-span-2"
+              error={form.formState.errors.coverImageUrl?.message}
+              hint="Use an HTTPS image URL, or select a README suggestion from GitHub review."
+              id={`project-cover-url-${value.id ?? "new"}`}
+              label="Cover image URL"
+            >
+              <Input
+                id={`project-cover-url-${value.id ?? "new"}`}
+                placeholder="https://..."
+                type="url"
+                {...form.register("coverImageUrl")}
               />
             </FormField>
             <FormField

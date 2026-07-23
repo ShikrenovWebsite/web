@@ -1,6 +1,7 @@
 import {
   addRepositoryToPortfolio,
   applyGitHubProjectField,
+  applyGitHubCoverImage,
   connectGitHubAccount,
   finishRepositoryChangeReview,
   handleUnavailableRepository,
@@ -49,6 +50,8 @@ export async function POST(
                 ? await testGitHubOrganizationAccess(body)
               : action === "apply"
                 ? await applyGitHubProjectField(body)
+                : action === "cover"
+                  ? await applyGitHubCoverImage(body)
                 : action === "finish"
                   ? await finishRepositoryChangeReview(body)
                   : action === "unavailable"

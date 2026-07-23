@@ -322,6 +322,7 @@ export async function saveProject(input: unknown): Promise<ActionResult> {
       technologies: splitTags(technologiesText),
       liveUrl: optional(data.liveUrl),
       sourceCodeUrl: optional(data.sourceCodeUrl),
+      coverImageUrl: optional(data.coverImageUrl),
       startDate: dateOrNull(data.startDate),
       endDate: dateOrNull(data.endDate),
       featured: data.featured,

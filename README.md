@@ -219,6 +219,40 @@ The sync:
 - never deletes projects or overwrites titles, descriptions, technologies,
   media, ordering, publication state, or featured state during sync.
 
+### Automatic project enrichment
+
+Every eligible new repository is enriched after its metadata is synchronized.
+Existing repositories are enriched again when GitHub reports a new push or
+when the analyzer version changes. The server inspects a bounded set of common
+repository files, including:
+
+- JavaScript package manifests and npm, pnpm, Yarn, and Bun lockfiles;
+- Dockerfiles and Compose configuration;
+- GitHub Actions, GitLab CI, and CircleCI workflows;
+- Prisma, Python, Go, Rust, PHP, and Ruby manifests;
+- Vercel, Netlify, Render, Fly.io, Railway, and Cloudflare configuration.
+
+At most 40 relevant files are considered. Individual files are capped at
+250 KB and the combined fetched content is capped at 1.5 MB. This keeps a
+manual sync predictable and prevents arbitrary repository contents from being
+executed. The analyzer detects frameworks, libraries, databases, cloud
+providers, CI/CD systems, package managers, deployment platforms, languages,
+and tools. It stores the evidence, detection snapshot, fingerprint, README,
+README images, and generated title/summary/description/technology suggestions
+on `GitHubRepository`.
+
+These values are immutable source suggestions, not public portfolio content.
+`PortfolioProject` remains the independently editable presentation record.
+Creating a project copies the current suggestions into a `DRAFT` once. Later
+syncs never update that project. The owner can explicitly apply one suggested
+field or select a stored README image as a cover; all other manual values,
+ordering, featured state, and publication state remain untouched.
+
+README Markdown is rendered through a conservative React renderer that does
+not inject README HTML or use `dangerouslySetInnerHTML`. Links are limited to
+HTTP(S). README images are suggestions only and are never selected as a public
+cover without an explicit admin action.
+
 GitHub owner records are source identities beneath the authenticated
 portfolio owner's single `GitHubConnection`. The personal owner is always
 enabled. Organizations never create an application `User`, Auth.js `Account`,

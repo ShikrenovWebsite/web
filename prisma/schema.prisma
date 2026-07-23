@@ -305,26 +305,27 @@ model Language {
 }
 
 model PortfolioProject {
-  id                   String            @id @default(cuid())
-  userId               String
-  githubRepositoryId   String?           @unique
-  title                String
-  slug                 String
-  shortDescription     String?
-  longDescription      String?           @db.Text
-  technologies         String[]
-  liveUrl              String?
-  sourceCodeUrl        String?
-  startDate            DateTime?
-  endDate              DateTime?
-  featured             Boolean           @default(false)
-  status               PublicationStatus @default(DRAFT)
-  sourceType           SourceType        @default(MANUAL)
-  sourceReferenceId    String?
-  displayOrder         Int               @default(0)
-  publishedAt          DateTime?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  userId             String
+  githubRepositoryId String?           @unique
+  title              String
+  slug               String
+  shortDescription   String?
+  longDescription    String?           @db.Text
+  technologies       String[]
+  liveUrl            String?
+  sourceCodeUrl      String?
+  coverImageUrl      String?
+  startDate          DateTime?
+  endDate            DateTime?
+  featured           Boolean           @default(false)
+  status             PublicationStatus @default(DRAFT)
+  sourceType         SourceType        @default(MANUAL)
+  sourceReferenceId  String?
+  displayOrder       Int               @default(0)
+  publishedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   githubRepository GitHubRepository? @relation(fields: [githubRepositoryId], references: [id], onDelete: SetNull)
@@ -335,20 +336,20 @@ model PortfolioProject {
 }
 
 model GitHubConnection {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  githubUserId        String
-  githubLogin         String
-  encryptedAccessToken String @db.Text
-  tokenKeyVersion     Int      @default(1)
-  scopes              String[]
-  includeForks        Boolean  @default(false)
-  includeArchived     Boolean  @default(false)
-  includeTemplates    Boolean  @default(false)
-  isActive            Boolean  @default(true)
-  lastSyncedAt        DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  githubUserId         String
+  githubLogin          String
+  encryptedAccessToken String    @db.Text
+  tokenKeyVersion      Int       @default(1)
+  scopes               String[]
+  includeForks         Boolean   @default(false)
+  includeArchived      Boolean   @default(false)
+  includeTemplates     Boolean   @default(false)
+  isActive             Boolean   @default(true)
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   owners       GitHubOwner[]
@@ -359,24 +360,24 @@ model GitHubConnection {
 }
 
 model GitHubOwner {
-  id                      String             @id @default(cuid())
+  id                      String                @id @default(cuid())
   connectionId            String
   githubOwnerId           String
   login                   String
   type                    GitHubOwnerType
   avatarUrl               String?
   preference              GitHubOwnerPreference @default(PENDING)
-  syncEnabled             Boolean            @default(false)
-  accessStatus            GitHubAccessStatus @default(ACCESSIBLE)
-  accessMessage           String?            @db.Text
+  syncEnabled             Boolean               @default(false)
+  accessStatus            GitHubAccessStatus    @default(ACCESSIBLE)
+  accessMessage           String?               @db.Text
   lastApiStatus           Int?
-  rawRepositoryCount      Int                @default(0)
-  eligibleRepositoryCount Int                @default(0)
+  rawRepositoryCount      Int                   @default(0)
+  eligibleRepositoryCount Int                   @default(0)
   diagnosticData          Json?
   lastDiscoveredAt        DateTime?
   lastSuccessfulSyncAt    DateTime?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
 
   connection   GitHubConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   repositories GitHubRepository[]
@@ -387,43 +388,56 @@ model GitHubOwner {
 }
 
 model GitHubRepository {
-  id                 String                 @id @default(cuid())
-  connectionId       String
-  ownerRecordId      String?
-  githubRepositoryId String
-  nodeId             String?
-  ownerLogin         String
-  ownerType          GitHubOwnerType        @default(USER)
-  ownerAvatarUrl     String?
-  name               String
-  fullName           String
-  description        String?                @db.Text
-  githubUrl          String
-  homepageUrl        String?
-  primaryLanguage    String?
-  topics             String[]
-  starCount          Int                    @default(0)
-  forkCount          Int                    @default(0)
-  visibility         String
-  isArchived         Boolean                @default(false)
-  isFork             Boolean                @default(false)
-  isTemplate         Boolean                @default(false)
-  defaultBranch      String?
-  readmePreview      String?                @db.Text
-  githubCreatedAt    DateTime?
-  githubUpdatedAt    DateTime?
-  githubPushedAt     DateTime?
-  lastSeenAt         DateTime
-  lastSuccessfulSyncAt DateTime?
-  unavailableAt      DateTime?
-  unavailableReason  String?
-  sourceSnapshot     Json
-  status             GitHubRepositoryStatus @default(PENDING)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  id                        String                 @id @default(cuid())
+  connectionId              String
+  ownerRecordId             String?
+  githubRepositoryId        String
+  nodeId                    String?
+  ownerLogin                String
+  ownerType                 GitHubOwnerType        @default(USER)
+  ownerAvatarUrl            String?
+  name                      String
+  fullName                  String
+  description               String?                @db.Text
+  githubUrl                 String
+  homepageUrl               String?
+  primaryLanguage           String?
+  topics                    String[]
+  starCount                 Int                    @default(0)
+  forkCount                 Int                    @default(0)
+  visibility                String
+  isArchived                Boolean                @default(false)
+  isFork                    Boolean                @default(false)
+  isTemplate                Boolean                @default(false)
+  defaultBranch             String?
+  readmePreview             String?                @db.Text
+  readmeMarkdown            String?                @db.Text
+  readmeImages              Json?
+  sourceFilesSnapshot       Json?
+  enrichmentSnapshot        Json?
+  enrichmentFingerprint     String?
+  enrichmentVersion         Int                    @default(0)
+  enrichedAt                DateTime?
+  enrichmentError           String?                @db.Text
+  detectedTechnologies      String[]               @default([])
+  suggestedTitle            String?
+  suggestedShortDescription String?                @db.Text
+  suggestedLongDescription  String?                @db.Text
+  suggestedCoverImageUrl    String?
+  githubCreatedAt           DateTime?
+  githubUpdatedAt           DateTime?
+  githubPushedAt            DateTime?
+  lastSeenAt                DateTime
+  lastSuccessfulSyncAt      DateTime?
+  unavailableAt             DateTime?
+  unavailableReason         String?
+  sourceSnapshot            Json
+  status                    GitHubRepositoryStatus @default(PENDING)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
 
-  connection  GitHubConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  ownerRecord GitHubOwner?       @relation(fields: [ownerRecordId], references: [id], onDelete: SetNull)
+  connection  GitHubConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  ownerRecord GitHubOwner?      @relation(fields: [ownerRecordId], references: [id], onDelete: SetNull)
   project     PortfolioProject?
   syncItems   GitHubSyncItem[]
 
@@ -433,29 +447,29 @@ model GitHubRepository {
 }
 
 model GitHubSyncRun {
-  id             String           @id @default(cuid())
-  userId         String
-  connectionId   String
-  status         GitHubSyncStatus @default(RUNNING)
-  repositoriesSeen Int            @default(0)
-  newCount       Int              @default(0)
-  changedCount   Int              @default(0)
-  unchangedCount Int              @default(0)
-  unavailableCount Int            @default(0)
-  warningCount   Int              @default(0)
-  rateLimitRemaining Int?
-  rateLimitResetAt DateTime?
-  personalRepositoriesFound Int   @default(0)
-  organizationsDiscovered Int     @default(0)
-  organizationRepositoriesFound Int @default(0)
-  organizationsSynchronized Int   @default(0)
-  organizationsSkipped Int        @default(0)
-  organizationsRequiringApproval Int @default(0)
-  partialFailureCount Int         @default(0)
-  errorMessage   String?          @db.Text
-  startedAt      DateTime         @default(now())
-  completedAt    DateTime?
-  createdAt      DateTime         @default(now())
+  id                             String           @id @default(cuid())
+  userId                         String
+  connectionId                   String
+  status                         GitHubSyncStatus @default(RUNNING)
+  repositoriesSeen               Int              @default(0)
+  newCount                       Int              @default(0)
+  changedCount                   Int              @default(0)
+  unchangedCount                 Int              @default(0)
+  unavailableCount               Int              @default(0)
+  warningCount                   Int              @default(0)
+  rateLimitRemaining             Int?
+  rateLimitResetAt               DateTime?
+  personalRepositoriesFound      Int              @default(0)
+  organizationsDiscovered        Int              @default(0)
+  organizationRepositoriesFound  Int              @default(0)
+  organizationsSynchronized      Int              @default(0)
+  organizationsSkipped           Int              @default(0)
+  organizationsRequiringApproval Int              @default(0)
+  partialFailureCount            Int              @default(0)
+  errorMessage                   String?          @db.Text
+  startedAt                      DateTime         @default(now())
+  completedAt                    DateTime?
+  createdAt                      DateTime         @default(now())
 
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   connection GitHubConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
@@ -466,15 +480,15 @@ model GitHubSyncRun {
 }
 
 model GitHubSyncItem {
-  id             String                   @id @default(cuid())
-  syncRunId      String
-  repositoryId   String
-  changeType     GitHubSyncChangeType
-  previousData   Json?
-  incomingData   Json
-  fieldsChanged  String[]
-  reviewedAt     DateTime?
-  createdAt      DateTime                 @default(now())
+  id            String               @id @default(cuid())
+  syncRunId     String
+  repositoryId  String
+  changeType    GitHubSyncChangeType
+  previousData  Json?
+  incomingData  Json
+  fieldsChanged String[]
+  reviewedAt    DateTime?
+  createdAt     DateTime             @default(now())
 
   syncRun    GitHubSyncRun    @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
   repository GitHubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
@@ -498,9 +512,9 @@ model CvUpload {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mediaAsset  MediaAsset    @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
-  importRuns  CvImportRun[]
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset    @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  importRuns CvImportRun[]
 
   @@index([userId, createdAt])
 }
@@ -518,9 +532,9 @@ model CvImportRun {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cvUpload  CvUpload       @relation(fields: [cvUploadId], references: [id], onDelete: Cascade)
-  items     CvImportItem[]
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvUpload CvUpload       @relation(fields: [cvUploadId], references: [id], onDelete: Cascade)
+  items    CvImportItem[]
 
   @@index([userId, createdAt])
   @@index([cvUploadId])
@@ -548,42 +562,42 @@ model CvImportItem {
 }
 
 model MediaAsset {
-  id          String    @id @default(cuid())
-  userId      String
-  projectId   String?
-  kind        MediaKind
-  storageKey  String    @unique
+  id           String    @id @default(cuid())
+  userId       String
+  projectId    String?
+  kind         MediaKind
+  storageKey   String    @unique
   originalName String
-  mimeType    String
-  sizeBytes   Int
-  checksum    String
-  altText     String?
-  isPrivate   Boolean   @default(true)
-  displayOrder Int      @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  mimeType     String
+  sizeBytes    Int
+  checksum     String
+  altText      String?
+  isPrivate    Boolean   @default(true)
+  displayOrder Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project   PortfolioProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  cvUpload  CvUpload?
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  PortfolioProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cvUpload CvUpload?
 
   @@index([userId, kind])
   @@index([projectId, displayOrder])
 }
 
 model SiteSettings {
-  id                    String   @id @default(cuid())
-  userId                String   @unique
-  siteTitle             String
-  siteDescription       String?  @db.Text
-  contactEmail          String?
-  isContactFormEnabled  Boolean  @default(false)
-  isCvDownloadEnabled   Boolean  @default(false)
-  publicCvUploadId      String?
-  socialLinks           Json?
-  seoMetadata           Json?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  siteTitle            String
+  siteDescription      String?  @db.Text
+  contactEmail         String?
+  isContactFormEnabled Boolean  @default(false)
+  isCvDownloadEnabled  Boolean  @default(false)
+  publicCvUploadId     String?
+  socialLinks          Json?
+  seoMetadata          Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

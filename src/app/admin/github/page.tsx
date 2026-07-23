@@ -7,6 +7,77 @@ import { parseGitHubScopes } from "@/lib/github/scopes";
 export const metadata = { title: "GitHub synchronization" };
 export const dynamic = "force-dynamic";
 
+function readmeImages(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (
+      typeof item !== "object" ||
+      !item ||
+      !("url" in item) ||
+      typeof item.url !== "string"
+    ) {
+      return [];
+    }
+    return [
+      {
+        url: item.url,
+        alt:
+          "alt" in item && typeof item.alt === "string"
+            ? item.alt
+            : "Project image",
+        source:
+          "source" in item && typeof item.source === "string"
+            ? item.source
+            : "README",
+      },
+    ];
+  });
+}
+
+function sourceFiles(value: unknown) {
+  const files =
+    typeof value === "object" &&
+    value &&
+    "files" in value &&
+    Array.isArray(value.files)
+      ? value.files
+      : Array.isArray(value)
+        ? value
+        : [];
+  return files.flatMap((item) => {
+    if (
+      typeof item !== "object" ||
+      !item ||
+      !("path" in item) ||
+      typeof item.path !== "string"
+    ) {
+      return [];
+    }
+    return [item.path];
+  });
+}
+
+function enrichmentCategories(value: unknown) {
+  if (
+    typeof value !== "object" ||
+    !value ||
+    !("categories" in value) ||
+    typeof value.categories !== "object" ||
+    !value.categories ||
+    Array.isArray(value.categories)
+  ) {
+    return [];
+  }
+
+  return Object.entries(value.categories).flatMap(([label, technologies]) =>
+    Array.isArray(technologies) &&
+    technologies.every((technology) => typeof technology === "string") &&
+    technologies.length
+      ? [{ label, technologies }]
+      : [],
+  );
+}
+
 export default async function AdminGitHubPage() {
   const { admin } = await requireAdminPage("/admin/github");
   const [connection, oauthAccount] = await Promise.all([
@@ -28,6 +99,7 @@ export default async function AdminGitHubPage() {
                 technologies: true,
                 liveUrl: true,
                 sourceCodeUrl: true,
+                coverImageUrl: true,
                 status: true,
                 featured: true,
                 displayOrder: true,
@@ -161,6 +233,26 @@ export default async function AdminGitHubPage() {
                 isTemplate: repository.isTemplate,
                 defaultBranch: repository.defaultBranch,
                 readmePreview: repository.readmePreview,
+                readmeMarkdown: repository.readmeMarkdown,
+                readmeImages: readmeImages(repository.readmeImages),
+                sourceFiles: sourceFiles(repository.sourceFilesSnapshot),
+                enrichmentCategories: enrichmentCategories(
+                  repository.enrichmentSnapshot,
+                ),
+                enrichmentVersion: repository.enrichmentVersion,
+                enrichmentError: repository.enrichmentError,
+                detectedTechnologies: repository.detectedTechnologies,
+                suggestedTitle: repository.suggestedTitle,
+                suggestedShortDescription:
+                  repository.suggestedShortDescription,
+                suggestedLongDescription:
+                  repository.suggestedLongDescription,
+                suggestedCoverImageUrl:
+                  repository.suggestedCoverImageUrl,
+                enrichedAt: repository.enrichedAt?.toISOString() ?? null,
+                enrichedAtLabel: formatAdminDateTime(
+                  repository.enrichedAt,
+                ),
                 githubUpdatedAt:
                   repository.githubUpdatedAt?.toISOString() ?? null,
                 githubUpdatedAtLabel: formatAdminDateTime(
