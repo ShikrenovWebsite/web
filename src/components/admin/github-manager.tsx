@@ -55,6 +55,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   githubAccessBadgeClass,
   githubAccessLabel,
+  githubOwnerPreferenceBadgeClass,
+  githubOwnerPreferenceLabel,
   githubReviewBadgeClass,
   githubReviewLabel,
   statusBadgeClass,
@@ -139,6 +141,7 @@ type GitHubOwner = {
   login: string;
   type: "USER" | "ORGANIZATION";
   avatarUrl: string | null;
+  preference: "PENDING" | "ENABLED" | "IGNORED";
   syncEnabled: boolean;
   accessStatus:
     | "ACCESSIBLE"
@@ -339,6 +342,11 @@ function OwnerCard({ owner }: { owner: GitHubOwner }) {
               <Badge className={githubAccessBadgeClass(owner.accessStatus)}>
                 {githubAccessLabel(owner.accessStatus)}
               </Badge>
+              <Badge
+                className={githubOwnerPreferenceBadgeClass(owner.preference)}
+              >
+                {githubOwnerPreferenceLabel(owner.preference)}
+              </Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Sync: {owner.syncEnabled ? "Enabled" : "Disabled"} · Repositories
@@ -356,22 +364,77 @@ function OwnerCard({ owner }: { owner: GitHubOwner }) {
           </div>
         </div>
         {owner.type === "ORGANIZATION" ? (
-          <Button
-            disabled={isPending}
-            onClick={() =>
-              run(() =>
-                setOrganizationSyncPreference({
-                  ownerId: owner.id,
-                  syncEnabled: !owner.syncEnabled,
-                }),
-              )
-            }
-            size="sm"
-            variant="outline"
-          >
-            <PendingIcon pending={isPending} />
-            {owner.syncEnabled ? "Disable sync" : "Enable sync"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {owner.preference !== "ENABLED" ? (
+              <Button
+                disabled={isPending}
+                onClick={() =>
+                  run(() =>
+                    setOrganizationSyncPreference({
+                      ownerId: owner.id,
+                      preference: "ENABLED",
+                    }),
+                  )
+                }
+                size="sm"
+              >
+                <PendingIcon pending={isPending} />
+                Enable synchronization
+              </Button>
+            ) : (
+              <Button
+                disabled={isPending}
+                onClick={() =>
+                  run(() =>
+                    setOrganizationSyncPreference({
+                      ownerId: owner.id,
+                      preference: "PENDING",
+                    }),
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                <PendingIcon pending={isPending} />
+                Disable sync
+              </Button>
+            )}
+            {owner.preference === "IGNORED" ? (
+              <Button
+                disabled={isPending}
+                onClick={() =>
+                  run(() =>
+                    setOrganizationSyncPreference({
+                      ownerId: owner.id,
+                      preference: "PENDING",
+                    }),
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                <PendingIcon pending={isPending} />
+                Restore
+              </Button>
+            ) : (
+              <Button
+                disabled={isPending}
+                onClick={() =>
+                  run(() =>
+                    setOrganizationSyncPreference({
+                      ownerId: owner.id,
+                      preference: "IGNORED",
+                    }),
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                <PendingIcon pending={isPending} />
+                Ignore
+              </Button>
+            )}
+          </div>
         ) : (
           <Badge>Always enabled</Badge>
         )}
@@ -982,8 +1045,9 @@ export function GitHubManager({ connection }: { connection: Connection | null })
                 Accounts and organizations
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Organization preferences control future synchronization without
-                deleting source records or portfolio projects.
+                Organizations are connected sources under @
+                {connection.githubLogin}. They do not create separate users,
+                portfolio accounts, or GitHub connections.
               </p>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">

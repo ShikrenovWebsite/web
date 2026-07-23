@@ -88,6 +88,7 @@ verified OAuth identity. Matching is case-insensitive.
 ```bash
 npm run dev
 npm run lint
+npm run test
 npm run typecheck
 npm run build
 npm run db:generate
@@ -217,6 +218,24 @@ The sync:
 - creates only `DRAFT` projects when **Add to portfolio** is selected;
 - never deletes projects or overwrites titles, descriptions, technologies,
   media, ordering, publication state, or featured state during sync.
+
+GitHub owner records are source identities beneath the authenticated
+portfolio owner's single `GitHubConnection`. The personal owner is always
+enabled. Organizations never create an application `User`, Auth.js `Account`,
+portfolio profile, tenant, or separate connection.
+
+Organization discovery merges both paginated sources by GitHub's stable
+numeric owner ID:
+
+- `GET /user/orgs?per_page=100`;
+- unique organization owners in the paginated authenticated
+  `GET /user/repos` result.
+
+New organizations start as `PENDING`. The administrator can enable or ignore
+them. `PENDING`, `ENABLED`, and `IGNORED` preferences persist across later
+syncs; only enabled organizations receive direct repository synchronization.
+Disabling or ignoring an organization never removes existing source records,
+review decisions, or projects.
 
 Organization access is evaluated independently. Missing `read:org`, an OAuth
 approval requirement, a `403`, or a rate limit is shown as a warning rather

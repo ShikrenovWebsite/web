@@ -20,7 +20,7 @@ import { getServerEnv } from "@/lib/env";
 import {
   githubProjectFieldSchema,
   githubAccessTestSchema,
-  organizationSyncPreferenceSchema,
+  organizationOwnerPreferenceSchema,
   repositoryIdSchema,
   repositoryReviewSchema,
   unavailableRepositoryActionSchema,
@@ -139,13 +139,9 @@ export async function connectGitHubAccount(): Promise<GitHubActionResult> {
     }
 
     await db.gitHubConnection.upsert({
-      where: {
-        userId_githubUserId: {
-          userId: admin.id,
-          githubUserId: String(githubUser.id),
-        },
-      },
+      where: { userId: admin.id },
       update: {
+        githubUserId: String(githubUser.id),
         githubLogin: githubUser.login,
         encryptedAccessToken: encryptGitHubToken(account.access_token),
         tokenKeyVersion: 1,
@@ -176,7 +172,7 @@ export async function setOrganizationSyncPreference(
   input: unknown,
 ): Promise<GitHubActionResult> {
   const { admin } = await requireAdminPage("/admin/github");
-  const parsed = organizationSyncPreferenceSchema.safeParse(input);
+  const parsed = organizationOwnerPreferenceSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: "Invalid organization preference." };
   }
@@ -188,7 +184,8 @@ export async function setOrganizationSyncPreference(
       connection: { userId: admin.id },
     },
     data: {
-      syncEnabled: parsed.data.syncEnabled,
+      preference: parsed.data.preference,
+      syncEnabled: parsed.data.preference === "ENABLED",
     },
   });
 
@@ -199,9 +196,12 @@ export async function setOrganizationSyncPreference(
   revalidateGitHub();
   return {
     success: true,
-    message: parsed.data.syncEnabled
-      ? "Organization synchronization enabled."
-      : "Organization synchronization disabled. Existing records were preserved.",
+    message:
+      parsed.data.preference === "ENABLED"
+        ? "Organization synchronization enabled."
+        : parsed.data.preference === "IGNORED"
+          ? "Organization ignored. Existing records and projects were preserved."
+          : "Organization returned to pending review.",
   };
 }
 
@@ -315,7 +315,6 @@ export async function testGitHubOrganizationAccess(
         login: organization.organization.login,
         type: "ORGANIZATION",
         avatarUrl: organization.organization.avatar_url ?? null,
-        syncEnabled: true,
         accessStatus: "ACCESSIBLE",
         accessMessage: membershipWarning
           ? "Public repositories are accessible, but GitHub reports that organization membership data is restricted until this OAuth app is approved."
@@ -336,7 +335,8 @@ export async function testGitHubOrganizationAccess(
         login: organization.organization.login,
         type: "ORGANIZATION",
         avatarUrl: organization.organization.avatar_url ?? null,
-        syncEnabled: true,
+        preference: "PENDING",
+        syncEnabled: false,
         accessStatus: "ACCESSIBLE",
         accessMessage: membershipWarning
           ? "Public repositories are accessible, but GitHub reports that organization membership data is restricted until this OAuth app is approved."

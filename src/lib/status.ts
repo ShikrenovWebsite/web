@@ -103,3 +103,35 @@ export function githubAccessBadgeClass(status: GitHubAccessState) {
 export function githubAccessLabel(status: GitHubAccessState) {
   return githubAccessPresentation[status].label;
 }
+
+export type GitHubOwnerPreferenceState = "PENDING" | "ENABLED" | "IGNORED";
+
+const githubOwnerPreferencePresentation: Record<
+  GitHubOwnerPreferenceState,
+  { label: string; className: string }
+> = {
+  PENDING: {
+    label: "Pending",
+    className: "border-sky-200 bg-sky-50 text-sky-700",
+  },
+  ENABLED: {
+    label: "Enabled",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  IGNORED: {
+    label: "Ignored",
+    className: "border-slate-200 bg-slate-50 text-slate-700",
+  },
+};
+
+export function githubOwnerPreferenceBadgeClass(
+  preference: GitHubOwnerPreferenceState,
+) {
+  return githubOwnerPreferencePresentation[preference].className;
+}
+
+export function githubOwnerPreferenceLabel(
+  preference: GitHubOwnerPreferenceState,
+) {
+  return githubOwnerPreferencePresentation[preference].label;
+}

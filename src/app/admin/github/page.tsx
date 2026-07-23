@@ -119,6 +119,7 @@ export default async function AdminGitHubPage() {
                 login: owner.login,
                 type: owner.type,
                 avatarUrl: owner.avatarUrl,
+                preference: owner.preference,
                 syncEnabled: owner.syncEnabled,
                 accessStatus: owner.accessStatus,
                 accessMessage: owner.accessMessage,

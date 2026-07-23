@@ -8,6 +8,11 @@ import {
   type GitHubListDiagnostics,
   type GitHubRepositorySource,
 } from "@/lib/github/client";
+import {
+  discoverOrganizationCandidates,
+  mergeRepositoriesByGithubId,
+  type GitHubOwnerPreference,
+} from "@/lib/github/owners";
 import { decryptGitHubToken } from "@/lib/github/token";
 
 const authoredSourceFields = [
@@ -372,58 +377,22 @@ export async function synchronizeGitHubRepositories(
       warnings.push(`Organization discovery: ${access.message}`);
     }
 
-    const existingOwnerByLogin = new Map(
-      existingOwners.map((owner) => [owner.login.toLowerCase(), owner]),
+    const existingOwnerByGithubId = new Map(
+      existingOwners.map((owner) => [owner.githubOwnerId, owner]),
     );
-    const organizationCandidates = new Map<
-      string,
-      {
-        githubOwnerId: string;
-        login: string;
-        avatarUrl: string | null;
-        syncEnabled: boolean;
-      }
-    >();
-
-    for (const organization of organizationSources) {
-      const existing = existingOwnerByLogin.get(organization.login.toLowerCase());
-      organizationCandidates.set(organization.login.toLowerCase(), {
-        githubOwnerId: String(organization.id),
-        login: organization.login,
-        avatarUrl: organization.avatar_url ?? null,
-        syncEnabled: existing?.syncEnabled ?? true,
-      });
-    }
-
-    for (const repository of accessibleRepositories) {
-      if (repository.owner.type !== "Organization") continue;
-      const key = repository.owner.login.toLowerCase();
-      const existing = existingOwnerByLogin.get(key);
-      if (!organizationCandidates.has(key)) {
-        organizationCandidates.set(key, {
-          githubOwnerId: String(repository.owner.id),
-          login: repository.owner.login,
-          avatarUrl: repository.owner.avatar_url ?? null,
-          syncEnabled: existing?.syncEnabled ?? true,
-        });
-      }
-    }
-
-    for (const owner of existingOwners) {
-      if (
-        owner.type === "ORGANIZATION" &&
-        !organizationCandidates.has(owner.login.toLowerCase())
-      ) {
-        organizationCandidates.set(owner.login.toLowerCase(), {
+    const organizationCandidates = discoverOrganizationCandidates({
+      organizations: organizationSources,
+      repositories: accessibleRepositories,
+      existingOrganizations: existingOwners
+        .filter((owner) => owner.type === "ORGANIZATION")
+        .map((owner) => ({
           githubOwnerId: owner.githubOwnerId,
           login: owner.login,
           avatarUrl: owner.avatarUrl,
-          syncEnabled: owner.syncEnabled,
-        });
-      }
-    }
+          preference: owner.preference,
+        })),
+    });
 
-    const sourceByExternalId = new Map<string, GitHubRepositorySource>();
     const successfullyInspectedOwners = new Set<string>([
       connection.githubLogin.toLowerCase(),
     ]);
@@ -433,15 +402,16 @@ export async function synchronizeGitHubRepositories(
         repository.owner.login.toLowerCase() ===
           connection.githubLogin.toLowerCase(),
     );
-    for (const repository of personalRepositories) {
-      sourceByExternalId.set(String(repository.id), repository);
-    }
+    const sourceRepositoryGroups: GitHubRepositorySource[][] = [
+      personalRepositories,
+    ];
 
     type OwnerState = {
       githubOwnerId: string;
       login: string;
       type: "USER" | "ORGANIZATION";
       avatarUrl: string | null;
+      preference: GitHubOwnerPreference;
       syncEnabled: boolean;
       accessStatus:
         | "ACCESSIBLE"
@@ -463,6 +433,7 @@ export async function synchronizeGitHubRepositories(
         login: authenticatedUser.login,
         type: "USER",
         avatarUrl: authenticatedUser.avatar_url ?? null,
+        preference: "ENABLED",
         syncEnabled: true,
         accessStatus: "ACCESSIBLE",
         accessMessage: null,
@@ -488,22 +459,41 @@ export async function synchronizeGitHubRepositories(
     let organizationsSkipped = 0;
     let organizationsRequiringApproval = 0;
 
-    for (const candidate of organizationCandidates.values()) {
-      if (!candidate.syncEnabled) {
+    for (const candidate of organizationCandidates) {
+      const syncEnabled = candidate.preference === "ENABLED";
+      if (!syncEnabled) {
         organizationsSkipped += 1;
+        const repositoriesFromAuthenticatedListing =
+          accessibleRepositories.filter(
+            (repository) =>
+              repository.owner.type === "Organization" &&
+              String(repository.owner.id) === candidate.githubOwnerId,
+          );
         ownerStates.push({
           ...candidate,
+          syncEnabled,
           type: "ORGANIZATION",
           accessStatus: hasReadOrg ? "ACCESSIBLE" : "REAUTHORIZATION_REQUIRED",
           accessMessage: hasReadOrg
-            ? null
+            ? candidate.preference === "PENDING"
+              ? "Review this newly discovered organization before enabling repository synchronization."
+              : "Organization synchronization is ignored. Existing repositories and projects are preserved."
             : "Reconnect GitHub to grant read:org.",
           inspectionSucceeded: false,
-          lastApiStatus: null,
-          rawRepositoryCount: 0,
+          lastApiStatus:
+            repositoriesFromAuthenticatedListing.length > 0
+              ? accessibleRepositoryResult.diagnostics.status
+              : organizationDiscoveryDiagnostics?.status ?? null,
+          rawRepositoryCount: repositoriesFromAuthenticatedListing.length,
           diagnosticData: {
             organizationDiscovery: organizationDiscoveryDiagnostics,
-            exclusionReason: "OWNER_DISABLED",
+            authenticatedUserRepositoryListing:
+              accessibleRepositoryResult.diagnostics,
+            preference: candidate.preference,
+            exclusionReason:
+              candidate.preference === "IGNORED"
+                ? "OWNER_IGNORED"
+                : "OWNER_PENDING",
           },
         });
         continue;
@@ -512,12 +502,9 @@ export async function synchronizeGitHubRepositories(
       const repositoriesFromAuthenticatedListing = accessibleRepositories.filter(
         (repository) =>
           repository.owner.type === "Organization" &&
-          repository.owner.login.toLowerCase() ===
-            candidate.login.toLowerCase(),
+          String(repository.owner.id) === candidate.githubOwnerId,
       );
-      for (const repository of repositoriesFromAuthenticatedListing) {
-        sourceByExternalId.set(String(repository.id), repository);
-      }
+      sourceRepositoryGroups.push(repositoriesFromAuthenticatedListing);
 
       try {
         const organizationResult =
@@ -549,14 +536,13 @@ export async function synchronizeGitHubRepositories(
             warnings.push(`${candidate.login}: ${membershipWarning}`);
           }
         }
-        for (const repository of organizationRepositories) {
-          sourceByExternalId.set(String(repository.id), repository);
-        }
+        sourceRepositoryGroups.push(organizationRepositories);
         successfullyInspectedOwners.add(candidate.login.toLowerCase());
         organizationsSynchronized += 1;
 
         ownerStates.push({
           ...candidate,
+          syncEnabled,
           type: "ORGANIZATION",
           accessStatus: !hasReadOrg
             ? "REAUTHORIZATION_REQUIRED"
@@ -599,6 +585,7 @@ export async function synchronizeGitHubRepositories(
         warnings.push(`${candidate.login}: ${access.message}`);
         ownerStates.push({
           ...candidate,
+          syncEnabled,
           type: "ORGANIZATION",
           accessStatus: access.status,
           accessMessage: access.message,
@@ -620,7 +607,10 @@ export async function synchronizeGitHubRepositories(
       );
     }
 
-    const sourceRepositories = [...sourceByExternalId.values()];
+    const mergedRepositories = mergeRepositoriesByGithubId(
+      sourceRepositoryGroups,
+    );
+    const sourceRepositories = mergedRepositories.repositories;
     const existingByExternalId = new Map(
       existingRepositories.map((repository) => [
         repository.githubRepositoryId,
@@ -715,7 +705,7 @@ export async function synchronizeGitHubRepositories(
           ...(owner.diagnosticData as Prisma.InputJsonObject),
           filters: filterAudit,
         };
-        const existing = existingOwnerByLogin.get(owner.login.toLowerCase());
+        const existing = existingOwnerByGithubId.get(owner.githubOwnerId);
         const ownerRecord = await transaction.gitHubOwner.upsert({
           where: existing
             ? { id: existing.id }
@@ -730,6 +720,7 @@ export async function synchronizeGitHubRepositories(
             login: owner.login,
             type: owner.type,
             avatarUrl: owner.avatarUrl,
+            preference: owner.preference,
             syncEnabled: owner.syncEnabled,
             accessStatus: owner.accessStatus,
             accessMessage: owner.accessMessage,
@@ -746,6 +737,7 @@ export async function synchronizeGitHubRepositories(
             login: owner.login,
             type: owner.type,
             avatarUrl: owner.avatarUrl,
+            preference: owner.preference,
             syncEnabled: owner.syncEnabled,
             accessStatus: owner.accessStatus,
             accessMessage: owner.accessMessage,
@@ -757,7 +749,7 @@ export async function synchronizeGitHubRepositories(
             lastSuccessfulSyncAt: owner.inspectionSucceeded ? now : null,
           },
         });
-        ownerRecordIds.set(owner.login.toLowerCase(), ownerRecord.id);
+        ownerRecordIds.set(owner.githubOwnerId, ownerRecord.id);
       }
 
       for (const item of prepared) {
@@ -788,7 +780,7 @@ export async function synchronizeGitHubRepositories(
           },
           update: {
             ownerRecordId:
-              ownerRecordIds.get(snapshot.ownerLogin.toLowerCase()) ?? null,
+              ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
             nodeId: snapshot.nodeId,
             ownerLogin: snapshot.ownerLogin,
             ownerType: snapshot.ownerType,
@@ -820,7 +812,7 @@ export async function synchronizeGitHubRepositories(
           create: {
             connectionId: connection.id,
             ownerRecordId:
-              ownerRecordIds.get(snapshot.ownerLogin.toLowerCase()) ?? null,
+              ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
             githubRepositoryId: snapshot.githubRepositoryId,
             nodeId: snapshot.nodeId,
             ownerLogin: snapshot.ownerLogin,
@@ -907,7 +899,11 @@ export async function synchronizeGitHubRepositories(
           status: "COMPLETED",
           repositoriesSeen: sourceRepositories.length,
           personalRepositoriesFound: personalRepositories.length,
-          organizationsDiscovered: organizationSources.length,
+          organizationsDiscovered: organizationCandidates.filter(
+            (owner) =>
+              owner.discoveredFromOrganizations ||
+              owner.inferredFromRepositories,
+          ).length,
           organizationRepositoriesFound: sourceRepositories.filter(
             (repository) => repository.owner.type === "Organization",
           ).length,
@@ -930,7 +926,11 @@ export async function synchronizeGitHubRepositories(
       return {
         seen: sourceRepositories.length,
         personalRepositoriesFound: personalRepositories.length,
-        organizationsDiscovered: organizationSources.length,
+        organizationsDiscovered: organizationCandidates.filter(
+          (owner) =>
+            owner.discoveredFromOrganizations ||
+            owner.inferredFromRepositories,
+        ).length,
         organizationRepositoriesFound: sourceRepositories.filter(
           (repository) => repository.owner.type === "Organization",
         ).length,

@@ -44,6 +44,12 @@ enum GitHubOwnerType {
   ORGANIZATION
 }
 
+enum GitHubOwnerPreference {
+  PENDING
+  ENABLED
+  IGNORED
+}
+
 enum GitHubAccessStatus {
   ACCESSIBLE
   REAUTHORIZATION_REQUIRED
@@ -330,7 +336,7 @@ model PortfolioProject {
 
 model GitHubConnection {
   id                  String   @id @default(cuid())
-  userId              String
+  userId              String   @unique
   githubUserId        String
   githubLogin         String
   encryptedAccessToken String @db.Text
@@ -349,7 +355,6 @@ model GitHubConnection {
   repositories GitHubRepository[]
   syncRuns     GitHubSyncRun[]
 
-  @@unique([userId, githubUserId])
   @@index([userId, isActive])
 }
 
@@ -360,7 +365,8 @@ model GitHubOwner {
   login                   String
   type                    GitHubOwnerType
   avatarUrl               String?
-  syncEnabled             Boolean            @default(true)
+  preference              GitHubOwnerPreference @default(PENDING)
+  syncEnabled             Boolean            @default(false)
   accessStatus            GitHubAccessStatus @default(ACCESSIBLE)
   accessMessage           String?            @db.Text
   lastApiStatus           Int?
@@ -377,7 +383,7 @@ model GitHubOwner {
 
   @@unique([connectionId, githubOwnerId])
   @@unique([connectionId, login])
-  @@index([connectionId, type, syncEnabled])
+  @@index([connectionId, type, preference])
 }
 
 model GitHubRepository {

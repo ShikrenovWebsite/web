@@ -23,9 +23,9 @@ export const unavailableRepositoryActionSchema = repositoryIdSchema.extend({
   action: z.enum(["KEEP", "UNPUBLISH", "DISCONNECT", "REMOVE_PROJECT"]),
 });
 
-export const organizationSyncPreferenceSchema = z.object({
+export const organizationOwnerPreferenceSchema = z.object({
   ownerId: z.string().cuid(),
-  syncEnabled: z.boolean(),
+  preference: z.enum(["PENDING", "ENABLED", "IGNORED"]),
 });
 
 export const githubAccessTestSchema = z.object({
