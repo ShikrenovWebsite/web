@@ -1,0 +1,4 @@
+ALTER TABLE "GitHubOwner"
+ADD COLUMN "lastApiStatus" INTEGER,
+ADD COLUMN "rawRepositoryCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "diagnosticData" JSONB;

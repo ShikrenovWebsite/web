@@ -1,0 +1,583 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum SourceType {
+  MANUAL
+  CV_IMPORT
+  GITHUB
+}
+
+enum GitHubRepositoryStatus {
+  PENDING
+  ACCEPTED
+  IGNORED
+  REMOVED
+}
+
+enum GitHubSyncStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum GitHubSyncChangeType {
+  NEW
+  UPDATED
+  UNCHANGED
+  UNAVAILABLE
+}
+
+enum GitHubOwnerType {
+  USER
+  ORGANIZATION
+}
+
+enum GitHubAccessStatus {
+  ACCESSIBLE
+  REAUTHORIZATION_REQUIRED
+  APPROVAL_REQUIRED
+  RESTRICTED
+  PARTIAL
+  UNAVAILABLE
+}
+
+enum CvUploadStatus {
+  UPLOADED
+  PROCESSING
+  READY_FOR_REVIEW
+  IMPORTED
+  FAILED
+}
+
+enum ImportRunStatus {
+  PROCESSING
+  READY_FOR_REVIEW
+  COMPLETED
+  FAILED
+}
+
+enum ImportItemStatus {
+  PENDING
+  ACCEPTED
+  SKIPPED
+  CONFLICT
+}
+
+enum ImportItemType {
+  PROFILE
+  EXPERIENCE
+  EDUCATION
+  SKILL
+  CERTIFICATION
+  LANGUAGE
+  PROJECT
+  CONTACT
+}
+
+enum ImportResolution {
+  KEEP_EXISTING
+  REPLACE
+  MERGE
+  SKIP
+}
+
+enum MediaKind {
+  CV
+  AVATAR
+  PROJECT_COVER
+  PROJECT_GALLERY
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  githubLogin   String?   @unique
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  profile           PortfolioProfile?
+  experiences       Experience[]
+  education         Education[]
+  skills            Skill[]
+  certifications    Certification[]
+  languages         Language[]
+  projects          PortfolioProject[]
+  githubConnections GitHubConnection[]
+  githubSyncRuns    GitHubSyncRun[]
+  cvUploads         CvUpload[]
+  cvImportRuns      CvImportRun[]
+  mediaAssets       MediaAsset[]
+  siteSettings      SiteSettings?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PortfolioProfile {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  fullName          String?
+  professionalTitle String?
+  biography         String?           @db.Text
+  email             String?
+  phone             String?
+  location          String?
+  websiteUrl        String?
+  socialLinks       Json?
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Experience {
+  id                String            @id @default(cuid())
+  userId            String
+  company           String
+  role              String
+  location          String?
+  description       String?           @db.Text
+  highlights        String[]
+  startDate         DateTime?
+  endDate           DateTime?
+  isCurrent         Boolean           @default(false)
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, displayOrder])
+}
+
+model Education {
+  id                String            @id @default(cuid())
+  userId            String
+  institution       String
+  qualification     String?
+  fieldOfStudy      String?
+  location          String?
+  description       String?           @db.Text
+  startDate         DateTime?
+  endDate           DateTime?
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, displayOrder])
+}
+
+model Skill {
+  id                String            @id @default(cuid())
+  userId            String
+  name              String
+  category          String?
+  proficiency       String?
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, status, displayOrder])
+}
+
+model Certification {
+  id                String            @id @default(cuid())
+  userId            String
+  name              String
+  issuer            String?
+  credentialUrl     String?
+  credentialId      String?
+  issuedAt          DateTime?
+  expiresAt         DateTime?
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, displayOrder])
+}
+
+model Language {
+  id                String            @id @default(cuid())
+  userId            String
+  name              String
+  proficiency       String?
+  status            PublicationStatus @default(DRAFT)
+  sourceType        SourceType        @default(MANUAL)
+  sourceReferenceId String?
+  displayOrder      Int               @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, status, displayOrder])
+}
+
+model PortfolioProject {
+  id                   String            @id @default(cuid())
+  userId               String
+  githubRepositoryId   String?           @unique
+  title                String
+  slug                 String
+  shortDescription     String?
+  longDescription      String?           @db.Text
+  technologies         String[]
+  liveUrl              String?
+  sourceCodeUrl        String?
+  startDate            DateTime?
+  endDate              DateTime?
+  featured             Boolean           @default(false)
+  status               PublicationStatus @default(DRAFT)
+  sourceType           SourceType        @default(MANUAL)
+  sourceReferenceId    String?
+  displayOrder         Int               @default(0)
+  publishedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  githubRepository GitHubRepository? @relation(fields: [githubRepositoryId], references: [id], onDelete: SetNull)
+  mediaAssets      MediaAsset[]
+
+  @@unique([userId, slug])
+  @@index([userId, status, displayOrder])
+}
+
+model GitHubConnection {
+  id                  String   @id @default(cuid())
+  userId              String
+  githubUserId        String
+  githubLogin         String
+  encryptedAccessToken String @db.Text
+  tokenKeyVersion     Int      @default(1)
+  scopes              String[]
+  includeForks        Boolean  @default(false)
+  includeArchived     Boolean  @default(false)
+  includeTemplates    Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  lastSyncedAt        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  owners       GitHubOwner[]
+  repositories GitHubRepository[]
+  syncRuns     GitHubSyncRun[]
+
+  @@unique([userId, githubUserId])
+  @@index([userId, isActive])
+}
+
+model GitHubOwner {
+  id                      String             @id @default(cuid())
+  connectionId            String
+  githubOwnerId           String
+  login                   String
+  type                    GitHubOwnerType
+  avatarUrl               String?
+  syncEnabled             Boolean            @default(true)
+  accessStatus            GitHubAccessStatus @default(ACCESSIBLE)
+  accessMessage           String?            @db.Text
+  lastApiStatus           Int?
+  rawRepositoryCount      Int                @default(0)
+  eligibleRepositoryCount Int                @default(0)
+  diagnosticData          Json?
+  lastDiscoveredAt        DateTime?
+  lastSuccessfulSyncAt    DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  connection   GitHubConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  repositories GitHubRepository[]
+
+  @@unique([connectionId, githubOwnerId])
+  @@unique([connectionId, login])
+  @@index([connectionId, type, syncEnabled])
+}
+
+model GitHubRepository {
+  id                 String                 @id @default(cuid())
+  connectionId       String
+  ownerRecordId      String?
+  githubRepositoryId String
+  nodeId             String?
+  ownerLogin         String
+  ownerType          GitHubOwnerType        @default(USER)
+  ownerAvatarUrl     String?
+  name               String
+  fullName           String
+  description        String?                @db.Text
+  githubUrl          String
+  homepageUrl        String?
+  primaryLanguage    String?
+  topics             String[]
+  starCount          Int                    @default(0)
+  forkCount          Int                    @default(0)
+  visibility         String
+  isArchived         Boolean                @default(false)
+  isFork             Boolean                @default(false)
+  isTemplate         Boolean                @default(false)
+  defaultBranch      String?
+  readmePreview      String?                @db.Text
+  githubCreatedAt    DateTime?
+  githubUpdatedAt    DateTime?
+  githubPushedAt     DateTime?
+  lastSeenAt         DateTime
+  lastSuccessfulSyncAt DateTime?
+  unavailableAt      DateTime?
+  unavailableReason  String?
+  sourceSnapshot     Json
+  status             GitHubRepositoryStatus @default(PENDING)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  connection  GitHubConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  ownerRecord GitHubOwner?       @relation(fields: [ownerRecordId], references: [id], onDelete: SetNull)
+  project     PortfolioProject?
+  syncItems   GitHubSyncItem[]
+
+  @@unique([connectionId, githubRepositoryId])
+  @@index([connectionId, status])
+  @@index([ownerRecordId, status])
+}
+
+model GitHubSyncRun {
+  id             String           @id @default(cuid())
+  userId         String
+  connectionId   String
+  status         GitHubSyncStatus @default(RUNNING)
+  repositoriesSeen Int            @default(0)
+  newCount       Int              @default(0)
+  changedCount   Int              @default(0)
+  unchangedCount Int              @default(0)
+  unavailableCount Int            @default(0)
+  warningCount   Int              @default(0)
+  rateLimitRemaining Int?
+  rateLimitResetAt DateTime?
+  personalRepositoriesFound Int   @default(0)
+  organizationsDiscovered Int     @default(0)
+  organizationRepositoriesFound Int @default(0)
+  organizationsSynchronized Int   @default(0)
+  organizationsSkipped Int        @default(0)
+  organizationsRequiringApproval Int @default(0)
+  partialFailureCount Int         @default(0)
+  errorMessage   String?          @db.Text
+  startedAt      DateTime         @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime         @default(now())
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection GitHubConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  items      GitHubSyncItem[]
+
+  @@index([connectionId, startedAt])
+  @@index([userId, startedAt])
+}
+
+model GitHubSyncItem {
+  id             String                   @id @default(cuid())
+  syncRunId      String
+  repositoryId   String
+  changeType     GitHubSyncChangeType
+  previousData   Json?
+  incomingData   Json
+  fieldsChanged  String[]
+  reviewedAt     DateTime?
+  createdAt      DateTime                 @default(now())
+
+  syncRun    GitHubSyncRun    @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+  repository GitHubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([syncRunId, repositoryId])
+  @@index([repositoryId])
+}
+
+model CvUpload {
+  id              String         @id @default(cuid())
+  userId          String
+  mediaAssetId    String         @unique
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  checksum        String
+  status          CvUploadStatus @default(UPLOADED)
+  extractedText   String?        @db.Text
+  extractionError String?        @db.Text
+  isPublic        Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaAsset  MediaAsset    @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  importRuns  CvImportRun[]
+
+  @@index([userId, createdAt])
+}
+
+model CvImportRun {
+  id             String          @id @default(cuid())
+  userId         String
+  cvUploadId     String
+  status         ImportRunStatus @default(PROCESSING)
+  parserVersion  String
+  structuredData Json?
+  errorMessage   String?         @db.Text
+  startedAt      DateTime        @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvUpload  CvUpload       @relation(fields: [cvUploadId], references: [id], onDelete: Cascade)
+  items     CvImportItem[]
+
+  @@index([userId, createdAt])
+  @@index([cvUploadId])
+}
+
+model CvImportItem {
+  id               String            @id @default(cuid())
+  importRunId      String
+  itemType         ImportItemType
+  status           ImportItemStatus  @default(PENDING)
+  resolution       ImportResolution?
+  importedData     Json
+  editedData       Json?
+  existingRecordId String?
+  existingData     Json?
+  duplicateScore   Float?
+  createdRecordId  String?
+  displayOrder     Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  importRun CvImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+
+  @@index([importRunId, status, displayOrder])
+}
+
+model MediaAsset {
+  id          String    @id @default(cuid())
+  userId      String
+  projectId   String?
+  kind        MediaKind
+  storageKey  String    @unique
+  originalName String
+  mimeType    String
+  sizeBytes   Int
+  checksum    String
+  altText     String?
+  isPrivate   Boolean   @default(true)
+  displayOrder Int      @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   PortfolioProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cvUpload  CvUpload?
+
+  @@index([userId, kind])
+  @@index([projectId, displayOrder])
+}
+
+model SiteSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  siteTitle             String
+  siteDescription       String?  @db.Text
+  contactEmail          String?
+  isContactFormEnabled  Boolean  @default(false)
+  isCvDownloadEnabled   Boolean  @default(false)
+  publicCvUploadId      String?
+  socialLinks           Json?
+  seoMetadata           Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
