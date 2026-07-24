@@ -201,6 +201,12 @@ export default async function AdminDashboardPage() {
                 Sync GitHub
               </Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/cv">
+                <FileText aria-hidden="true" className="size-4" />
+                Create CV
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

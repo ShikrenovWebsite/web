@@ -6,9 +6,30 @@ const margin = 48;
 const contentWidth = A4.width - margin * 2;
 
 function wrap(text: string, font: PDFFont, size: number, width: number) {
+  function splitLongWord(word: string) {
+    if (font.widthOfTextAtSize(word, size) <= width) return [word];
+    const chunks: string[] = [];
+    let chunk = "";
+    for (const character of word) {
+      const next = `${chunk}${character}`;
+      if (chunk && font.widthOfTextAtSize(next, size) > width) {
+        chunks.push(chunk);
+        chunk = character;
+      } else {
+        chunk = next;
+      }
+    }
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  }
+
   const paragraphs = text.split(/\r?\n/);
   return paragraphs.flatMap((paragraph, paragraphIndex) => {
-    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    const words = paragraph
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap(splitLongWord);
     const lines: string[] = [];
     let line = "";
     for (const word of words) {
@@ -75,8 +96,8 @@ export async function generateCvPdf(data: CvDocumentData) {
     y -= options.gapAfter ?? 0;
   }
 
-  function section(title: string) {
-    ensure(38);
+  function section(title: string, firstItemHeight = 38) {
+    ensure(38 + firstItemHeight);
     y -= 8;
     lines(title.toUpperCase(), { font: bold, size: 10, gapAfter: 3 });
     page.drawLine({
@@ -131,7 +152,7 @@ export async function generateCvPdf(data: CvDocumentData) {
 
   for (const sectionName of data.version.sectionOrder) {
     if (sectionName === "experience" && data.experience.length) {
-      section("Experience");
+      section("Experience", 52);
       for (const item of data.experience) {
         ensure(52);
         lines(`${item.role} - ${item.company}`, { font: bold, size: 10.5 });
@@ -146,7 +167,7 @@ export async function generateCvPdf(data: CvDocumentData) {
         y -= 5;
       }
     } else if (sectionName === "projects" && data.projects.length) {
-      section("Projects");
+      section("Projects", 48);
       for (const item of data.projects) {
         ensure(48);
         lines(item.title, { font: bold, size: 10.5 });
@@ -164,7 +185,7 @@ export async function generateCvPdf(data: CvDocumentData) {
         y -= 5;
       }
     } else if (sectionName === "education" && data.education.length) {
-      section("Education");
+      section("Education", 42);
       for (const item of data.education) {
         ensure(42);
         lines(

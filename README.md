@@ -350,12 +350,17 @@ unless replacement was explicitly confirmed.
 Open `/admin/cv` to create named CV versions. A version stores references to
 canonical records, selections/order, a CV-specific headline and summary, and
 optional per-item bullet overrides. Overrides never update website content.
+Published, complete portfolio records are preselected; incomplete records stay
+available with explicit readiness warnings so they can be fixed or excluded.
+Contact fields and section/item order are saved per version.
 
 The preview uses a print-friendly A4, black-and-white, ATS-oriented template.
 The authorized PDF endpoint generates selectable text and returns a private
 attachment. Every download stores a private immutable snapshot, checksum, page
-count, filename, and canonical-data timestamp. The admin indicates when newer
-portfolio data is available.
+count, filename, and canonical-data timestamp. Export history supports
+authorized re-downloads of the exact immutable PDF bytes. The admin indicates
+when newer portfolio data is available and can refresh the version while
+preserving CV-specific selections and overrides.
 
 DOCX export is deferred until it can match the PDF workflow's layout and
 snapshot guarantees.

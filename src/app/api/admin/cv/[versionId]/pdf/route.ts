@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { requireAdminApi } from "@/lib/auth";
 import { getCvDocumentData } from "@/lib/cv/document";
 import { cvFilename, generateCvPdf } from "@/lib/cv/pdf";
+import { databaseCuidSchema } from "@/lib/cv/version-input";
 import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 export async function GET(
   _request: Request,
@@ -11,6 +14,9 @@ export async function GET(
   const authorization = await requireAdminApi();
   if (!authorization.authorized) return authorization.response;
   const { versionId } = await context.params;
+  if (!databaseCuidSchema.safeParse(versionId).success) {
+    return Response.json({ error: "Invalid CV version ID." }, { status: 400 });
+  }
   const data = await getCvDocumentData(
     authorization.session.admin.id,
     versionId,
@@ -39,7 +45,10 @@ export async function GET(
     }),
     db.cvVersion.update({
       where: { id: versionId },
-      data: { lastExportedAt: new Date() },
+      data: {
+        lastExportedAt: new Date(),
+        sourceUpdatedAt: new Date(data.canonicalUpdatedAt),
+      },
     }),
   ]);
   return new Response(new Uint8Array(generated.bytes), {

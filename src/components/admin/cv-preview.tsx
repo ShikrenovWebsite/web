@@ -10,7 +10,7 @@ function SectionTitle({ children }: { children: string }) {
 
 export function CvPreview({ data }: { data: CvDocumentData }) {
   return (
-    <article className="cv-sheet mx-auto min-h-[297mm] max-w-[210mm] bg-white px-[16mm] py-[14mm] text-[10pt] leading-[1.4] text-black shadow-sm print:shadow-none">
+    <article className="cv-sheet mx-auto min-h-[297mm] max-w-[210mm] bg-white p-[17mm] text-[10pt] leading-[1.4] text-black shadow-sm print:shadow-none">
       <header className="mb-5">
         <h1 className="text-3xl font-bold tracking-tight">
           {data.profile.fullName || "Curriculum Vitae"}
@@ -99,6 +99,13 @@ export function CvPreview({ data }: { data: CvDocumentData }) {
                           <li key={highlight}>{highlight}</li>
                         ))}
                       </ul>
+                    ) : null}
+                    {[item.liveUrl, item.sourceCodeUrl].filter(Boolean).length ? (
+                      <p className="mt-1 break-all text-[9pt]">
+                        {[item.liveUrl, item.sourceCodeUrl]
+                          .filter(Boolean)
+                          .join(" | ")}
+                      </p>
                     ) : null}
                   </div>
                 ))}

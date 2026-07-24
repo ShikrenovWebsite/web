@@ -13,6 +13,8 @@ test("generates a selectable multi-page A4 PDF with a sensible filename", async 
       summary: "Production-minded engineer.",
       sectionOrder: ["experience", "projects", "education", "skills"],
       updatedAt: new Date(0).toISOString(),
+      sourceUpdatedAt: new Date(0).toISOString(),
+      newerDataAvailable: false,
     },
     profile: {
       fullName: "Petar Shikrenov",

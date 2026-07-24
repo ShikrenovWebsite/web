@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { databaseCuidSchema } from "@/lib/cv/version-input";
 
 export type CvDocumentData = {
   version: {
@@ -10,6 +11,8 @@ export type CvDocumentData = {
     summary: string;
     sectionOrder: string[];
     updatedAt: string;
+    sourceUpdatedAt: string;
+    newerDataAvailable: boolean;
   };
   profile: {
     fullName: string;
@@ -79,37 +82,37 @@ function maxDate(values: Date[]) {
 export async function canonicalUpdatedAtForUser(userId: string) {
   const [profile, experience, education, projects, skills, certifications, languages] =
     await Promise.all([
-      db.portfolioProfile.findUnique({
-        where: { userId },
+      db.portfolioProfile.findFirst({
+        where: { userId, status: "PUBLISHED" },
         select: { updatedAt: true },
       }),
       db.experience.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
       db.education.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
       db.portfolioProject.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
       db.skill.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
       db.certification.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
       db.language.findFirst({
-        where: { userId },
+        where: { userId, status: "PUBLISHED" },
         orderBy: { updatedAt: "desc" },
         select: { updatedAt: true },
       }),
@@ -127,30 +130,57 @@ export async function canonicalUpdatedAtForUser(userId: string) {
 }
 
 export async function getCvDocumentData(userId: string, cvVersionId: string) {
+  if (!databaseCuidSchema.safeParse(cvVersionId).success) return null;
   const version = await db.cvVersion.findFirst({
     where: { id: cvVersionId, userId },
   });
   if (!version) return null;
   const [profile, experience, projects, education, skills, certifications, languages] =
     await Promise.all([
-      db.portfolioProfile.findUnique({ where: { userId } }),
+      db.portfolioProfile.findFirst({
+        where: { userId, status: "PUBLISHED" },
+      }),
       db.experience.findMany({
-        where: { userId, id: { in: version.selectedExperienceIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedExperienceIds },
+        },
       }),
       db.portfolioProject.findMany({
-        where: { userId, id: { in: version.selectedProjectIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedProjectIds },
+        },
       }),
       db.education.findMany({
-        where: { userId, id: { in: version.selectedEducationIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedEducationIds },
+        },
       }),
       db.skill.findMany({
-        where: { userId, id: { in: version.selectedSkillIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedSkillIds },
+        },
       }),
       db.certification.findMany({
-        where: { userId, id: { in: version.selectedCertificationIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedCertificationIds },
+        },
       }),
       db.language.findMany({
-        where: { userId, id: { in: version.selectedLanguageIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: version.selectedLanguageIds },
+        },
       }),
     ]);
   const overrides =
@@ -180,6 +210,18 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
         )
       : [];
   const canonicalUpdatedAt = await canonicalUpdatedAtForUser(userId);
+  const contactFields =
+    typeof version.visibilitySettings === "object" &&
+    version.visibilitySettings &&
+    !Array.isArray(version.visibilitySettings) &&
+    "contactFields" in version.visibilitySettings &&
+    Array.isArray(version.visibilitySettings.contactFields)
+      ? new Set(
+          version.visibilitySettings.contactFields.filter(
+            (field): field is string => typeof field === "string",
+          ),
+        )
+      : new Set(["email", "phone", "location", "website", "links"]);
 
   return {
     version: {
@@ -190,14 +232,20 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
       summary: version.customSummary ?? profile?.biography ?? "",
       sectionOrder: version.sectionOrder,
       updatedAt: version.updatedAt.toISOString(),
+      sourceUpdatedAt: (version.sourceUpdatedAt ?? new Date(0)).toISOString(),
+      newerDataAvailable:
+        !version.sourceUpdatedAt ||
+        canonicalUpdatedAt > version.sourceUpdatedAt,
     },
     profile: {
       fullName: profile?.fullName ?? "",
-      email: profile?.email ?? "",
-      phone: profile?.phone ?? "",
-      location: profile?.location ?? "",
-      website: profile?.websiteUrl ?? "",
-      links: social,
+      email: contactFields.has("email") ? (profile?.email ?? "") : "",
+      phone: contactFields.has("phone") ? (profile?.phone ?? "") : "",
+      location: contactFields.has("location") ? (profile?.location ?? "") : "",
+      website: contactFields.has("website")
+        ? (profile?.websiteUrl ?? "")
+        : "",
+      links: contactFields.has("links") ? social : [],
     },
     experience: ordered(experience, version.selectedExperienceIds).map(
       (item) => ({

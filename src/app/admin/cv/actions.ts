@@ -2,66 +2,76 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { requireAdminPage } from "@/lib/auth";
 import { canonicalUpdatedAtForUser } from "@/lib/cv/document";
+import {
+  allocateUniqueCvVersionName,
+  type CvVersionInput,
+  createCvVersionForPreview,
+  cvPreviewPath,
+  cvVersionSavedMessage,
+  cvVersionInputSchema,
+  databaseCuidSchema,
+} from "@/lib/cv/version-input";
 import { db } from "@/lib/db";
 
 export type CvVersionActionResult = {
   success: boolean;
   message: string;
+  id?: string;
+  previewPath?: string;
 };
 
-const cvVersionSchema = z.object({
-  id: z.string().cuid().optional(),
-  name: z.string().trim().min(1).max(120),
-  customHeadline: z.string().trim().max(200),
-  customSummary: z.string().trim().max(10_000),
-  selectedExperienceIds: z.array(z.string().cuid()).max(100),
-  selectedProjectIds: z.array(z.string().cuid()).max(100),
-  selectedEducationIds: z.array(z.string().cuid()).max(100),
-  selectedSkillIds: z.array(z.string().cuid()).max(200),
-  selectedCertificationIds: z.array(z.string().cuid()).max(100),
-  selectedLanguageIds: z.array(z.string().cuid()).max(100),
-  sectionOrder: z
-    .array(
-      z.enum([
-        "experience",
-        "projects",
-        "education",
-        "skills",
-        "certifications",
-        "languages",
-      ]),
-    )
-    .min(1),
-  overridesJson: z.string().max(100_000),
-});
-
-const deleteSchema = z.object({ id: z.string().cuid() });
+const deleteSchema = z.object({ id: databaseCuidSchema });
 
 async function assertOwnedIds(
   userId: string,
-  input: z.infer<typeof cvVersionSchema>,
+  input: CvVersionInput,
 ) {
   const [experience, projects, education, skills, certifications, languages] =
     await Promise.all([
       db.experience.count({
-        where: { userId, id: { in: input.selectedExperienceIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedExperienceIds },
+        },
       }),
       db.portfolioProject.count({
-        where: { userId, id: { in: input.selectedProjectIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedProjectIds },
+        },
       }),
       db.education.count({
-        where: { userId, id: { in: input.selectedEducationIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedEducationIds },
+        },
       }),
       db.skill.count({
-        where: { userId, id: { in: input.selectedSkillIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedSkillIds },
+        },
       }),
       db.certification.count({
-        where: { userId, id: { in: input.selectedCertificationIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedCertificationIds },
+        },
       }),
       db.language.count({
-        where: { userId, id: { in: input.selectedLanguageIds } },
+        where: {
+          userId,
+          status: "PUBLISHED",
+          id: { in: input.selectedLanguageIds },
+        },
       }),
     ]);
   return (
@@ -78,7 +88,7 @@ export async function saveCvVersion(
   input: unknown,
 ): Promise<CvVersionActionResult> {
   const { admin } = await requireAdminPage("/admin/cv");
-  const parsed = cvVersionSchema.safeParse(input);
+  const parsed = cvVersionInputSchema.safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
@@ -101,6 +111,7 @@ export async function saveCvVersion(
     id,
     customHeadline,
     customSummary,
+    contactFields,
     overridesJson: _overridesJson,
     ...data
   } = parsed.data;
@@ -110,20 +121,88 @@ export async function saveCvVersion(
     customHeadline: customHeadline || null,
     customSummary: customSummary || null,
     overrides: overrides as object,
+    visibilitySettings: { contactFields },
     sourceUpdatedAt: await canonicalUpdatedAtForUser(admin.id),
   };
 
-  if (id) {
-    const updated = await db.cvVersion.updateMany({
-      where: { id, userId: admin.id },
-      data: payload,
+  const saved = await db.$transaction(async (transaction) => {
+    await transaction.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`cv-version:${admin.id}`}, 0))`,
+    );
+    if (id) {
+      const existing = await transaction.cvVersion.findFirst({
+        where: { id, userId: admin.id },
+        select: { id: true },
+      });
+      if (!existing) return null;
+    }
+    const allocated = await allocateUniqueCvVersionName({
+      requestedName: data.name,
+      exclusive: async (operation) => operation(),
+      listExistingNames: async () => {
+        const versions = await transaction.cvVersion.findMany({
+          where: {
+            userId: admin.id,
+            ...(id ? { id: { not: id } } : {}),
+          },
+          select: { name: true },
+        });
+        return versions.map((version) => version.name);
+      },
+      create: async (name) => {
+        if (id) {
+          const updated = await transaction.cvVersion.update({
+            where: { id },
+            data: { ...payload, name },
+            select: { id: true },
+          });
+          return {
+            id: updated.id,
+            previewPath: cvPreviewPath(updated.id),
+          };
+        }
+        return createCvVersionForPreview(() =>
+          transaction.cvVersion.create({
+            data: { ...payload, name, userId: admin.id },
+            select: { id: true },
+          }),
+        );
+      },
     });
-    if (!updated.count) return { success: false, message: "CV version not found." };
-  } else {
-    await db.cvVersion.create({ data: { ...payload, userId: admin.id } });
-  }
+    return allocated;
+  });
+  if (!saved) return { success: false, message: "CV version not found." };
+  const savedId = saved.created.id;
+  const previewPath = saved.created.previewPath;
   revalidatePath("/admin/cv");
-  return { success: true, message: id ? "CV version updated." : "CV version created." };
+  if (savedId) revalidatePath(`/admin/cv/${savedId}/preview`);
+  return {
+    success: true,
+    message: cvVersionSavedMessage(data.name, saved.name, !id),
+    id: savedId,
+    previewPath,
+  };
+}
+
+export async function refreshCvVersionFromPortfolio(
+  input: unknown,
+): Promise<CvVersionActionResult> {
+  const { admin } = await requireAdminPage("/admin/cv");
+  const parsed = deleteSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: "Invalid CV version." };
+  const updated = await db.cvVersion.updateMany({
+    where: { id: parsed.data.id, userId: admin.id },
+    data: { sourceUpdatedAt: await canonicalUpdatedAtForUser(admin.id) },
+  });
+  if (!updated.count) return { success: false, message: "CV version not found." };
+  revalidatePath("/admin/cv");
+  revalidatePath(`/admin/cv/${parsed.data.id}/preview`);
+  return {
+    success: true,
+    message:
+      "The CV now uses the latest portfolio data. CV-specific selections and overrides were preserved.",
+    id: parsed.data.id,
+  };
 }
 
 export async function deleteCvVersion(
