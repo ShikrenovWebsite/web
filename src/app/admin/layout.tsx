@@ -1,13 +1,10 @@
 import Link from "next/link";
-import {
-  DesktopAdminNav,
-  MobileAdminNav,
-} from "@/components/admin/admin-nav";
+import { DesktopAdminNav, MobileAdminNav } from "@/components/admin/admin-nav";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { PublishButton } from "@/components/admin/publish-button";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, ShieldCheck } from "@/components/ui/icons";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { ThemeIconToggle } from "@/components/theme/theme-icon-toggle";
 import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +30,7 @@ export default async function AdminLayout({
               {admin.githubLogin ? `@${admin.githubLogin}` : admin.name}
             </span>
             <PublishButton />
-            <ThemeToggle compact />
+            <ThemeIconToggle />
             <Button asChild size="icon" variant="ghost">
               <Link aria-label="View public portfolio" href="/" target="_blank">
                 <ExternalLink aria-hidden="true" className="size-4" />
