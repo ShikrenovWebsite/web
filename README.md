@@ -4,10 +4,10 @@ A production-oriented personal portfolio and content-management system built wit
 Router, TypeScript, PostgreSQL, Prisma, Auth.js, Tailwind CSS, and shadcn/ui
 conventions.
 
-Phases 1–3 include the data architecture, secure owner-only authentication,
-public portfolio, responsive administration, content management for profile,
-experience, education, skills, and projects, plus review-first GitHub repository
-synchronization. CV parsing is deliberately deferred to Phase 4.
+The application includes secure owner-only authentication, a public portfolio,
+responsive content administration, review-first GitHub synchronization,
+automatic staged skill suggestions, private PDF/DOCX CV import, and
+reference-based CV generation.
 
 ## Requirements
 
@@ -132,8 +132,8 @@ serialized into the browser session.
   presentation lives in `PortfolioProject`.
 - GitHub decisions persist as `PENDING`, `ACCEPTED`, `IGNORED`, or `REMOVED`.
 - CV extraction and conflict review live in `CvImportRun` and `CvImportItem`.
-- CVs and media store private storage keys and metadata; file bytes will use a
-  storage adapter in Phase 4.
+- CVs and media store private storage keys and database-backed private bytes;
+  neither is serialized to client components.
 - Future imports and sync-created projects default to `DRAFT`; neither workflow
   will publish records automatically.
 
@@ -305,6 +305,61 @@ GitHub's rate limit is read from response headers. When exhausted, the run is
 marked failed with its reset time and existing repositories remain intact. A
 subsequent manual sync can be started after that time.
 
+## Skill suggestions
+
+Accepted GitHub repositories and canonical project technologies feed a staged
+`SkillSuggestion` layer. Technology aliases are normalized before aggregation,
+so values such as `nextjs`/`Next.js`, `postgres`/`PostgreSQL`, and
+`tailwind`/`Tailwind CSS` share one suggestion.
+
+Open `/admin/skills` and choose **Refresh**, or run GitHub sync/edit a project
+to refresh automatically. Suggestions show confidence, source count, and
+contributing repositories/projects. Accepting creates one canonical `DRAFT`
+skill or links to an existing manual skill. Ignored decisions persist. Refresh
+never renames, recategorizes, deletes, publishes, or restores manual/ignored
+skills.
+
+## CV import and generation
+
+### Import workflow
+
+Open `/admin/cv-import`:
+
+1. Upload a PDF or DOCX up to 8 MB.
+2. The server validates extension, declared MIME type, and file signature.
+3. The private file is stored in Neon and transitions through extraction and
+   parsing statuses.
+4. PDF text is extracted in page order; DOCX text preserves paragraph order
+   and captures safe HTTP(S) hyperlinks.
+5. Nearly empty PDFs are reported as likely scanned/image-only documents. OCR
+   is deliberately not attempted.
+6. A deterministic versioned parser creates a strict structured draft.
+7. Conservative matching compares the proposal with current canonical data.
+8. Each item can be skipped, imported as a new draft, merged, kept, or
+   explicitly replaced after confirmation.
+9. **Apply approved items** commits the batch transactionally. A failure rolls
+   back every canonical mutation while retaining the review draft.
+
+Unreviewed parser output never writes to canonical portfolio tables. Repeating
+an already completed run is idempotent. Project merges retain GitHub repository
+relationships, publication state, featured state, and manual authored fields
+unless replacement was explicitly confirmed.
+
+### CV versions and PDF export
+
+Open `/admin/cv` to create named CV versions. A version stores references to
+canonical records, selections/order, a CV-specific headline and summary, and
+optional per-item bullet overrides. Overrides never update website content.
+
+The preview uses a print-friendly A4, black-and-white, ATS-oriented template.
+The authorized PDF endpoint generates selectable text and returns a private
+attachment. Every download stores a private immutable snapshot, checksum, page
+count, filename, and canonical-data timestamp. The admin indicates when newer
+portfolio data is available.
+
+DOCX export is deferred until it can match the PDF workflow's layout and
+snapshot guarantees.
+
 ## Database changes
 
 For schema development, create a separate Neon development branch/database and
@@ -345,6 +400,6 @@ require server-side database access.
 
 ## Next phase
 
-Implement Phase 4: private PDF/DOCX storage, text extraction, structured CV
-drafts, duplicate/conflict detection, field-level review, and selective import
-without overwriting or publishing existing portfolio content.
+Add an external private object-storage adapter for CV/media bytes, optional
+scanned-PDF OCR with explicit cost controls, richer drag-and-drop CV ordering,
+and a verified DOCX export template.

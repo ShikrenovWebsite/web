@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/profile", label: "Profile", icon: UserRound },
   { href: "/admin/cv-import", label: "CV import", icon: FileText },
+  { href: "/admin/cv", label: "CV builder", icon: FileText },
   { href: "/admin/github", label: "GitHub", icon: GitFork },
   { href: "/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/admin/experience", label: "Experience", icon: BriefcaseBusiness },

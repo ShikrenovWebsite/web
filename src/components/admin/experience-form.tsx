@@ -33,6 +33,7 @@ import {
 const emptyExperience: ExperienceInput = {
   company: "",
   role: "",
+  employmentType: "",
   location: "",
   description: "",
   highlightsText: "",
@@ -119,6 +120,17 @@ export function ExperienceForm({
               <Input
                 id={`company-${value.id ?? "new"}`}
                 {...form.register("company")}
+              />
+            </FormField>
+            <FormField
+              error={form.formState.errors.employmentType?.message}
+              id={`experience-type-${value.id ?? "new"}`}
+              label="Employment type"
+            >
+              <Input
+                id={`experience-type-${value.id ?? "new"}`}
+                placeholder="Full-time, contract, freelance"
+                {...form.register("employmentType")}
               />
             </FormField>
             <FormField

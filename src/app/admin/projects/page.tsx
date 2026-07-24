@@ -61,6 +61,7 @@ export default async function ProjectsPage() {
               title: item.title,
               shortDescription: item.shortDescription ?? "",
               longDescription: item.longDescription ?? "",
+              highlightsText: item.highlights.join("\n"),
               technologiesText: item.technologies.join(", "),
               liveUrl: item.liveUrl ?? "",
               sourceCodeUrl: item.sourceCodeUrl ?? "",

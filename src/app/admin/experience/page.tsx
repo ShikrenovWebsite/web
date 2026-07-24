@@ -49,6 +49,7 @@ export default async function ExperiencePage() {
               id: item.id,
               company: item.company,
               role: item.role,
+              employmentType: item.employmentType ?? "",
               location: item.location ?? "",
               description: item.description ?? "",
               highlightsText: item.highlights.join("\n"),

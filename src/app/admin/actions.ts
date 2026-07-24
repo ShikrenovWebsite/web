@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { z } from "zod";
 import { requireAdminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 import {
   changeStatusSchema,
   deleteContentSchema,
@@ -137,6 +138,7 @@ export async function saveExperience(input: unknown): Promise<ActionResult> {
     const payload = {
       company: data.company,
       role: data.role,
+      employmentType: optional(data.employmentType),
       location: optional(data.location),
       description: optional(data.description),
       highlights: splitLines(highlightsText),
@@ -184,13 +186,14 @@ export async function saveEducation(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return validationError(parsed.error);
 
   try {
-    const { id, ...data } = parsed.data;
+    const { id, achievementsText, ...data } = parsed.data;
     const payload = {
       institution: data.institution,
       qualification: optional(data.qualification),
       fieldOfStudy: optional(data.fieldOfStudy),
       location: optional(data.location),
       description: optional(data.description),
+      achievements: splitLines(achievementsText),
       startDate: dateOrNull(data.startDate),
       endDate: dateOrNull(data.endDate),
       status: data.status,
@@ -312,13 +315,14 @@ export async function saveProject(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return validationError(parsed.error);
 
   try {
-    const { id, technologiesText, ...data } = parsed.data;
+    const { id, technologiesText, highlightsText, ...data } = parsed.data;
     const slug = await uniqueProjectSlug(admin.id, data.title, id);
     const payload = {
       title: data.title,
       slug,
       shortDescription: optional(data.shortDescription),
       longDescription: optional(data.longDescription),
+      highlights: splitLines(highlightsText),
       technologies: splitTags(technologiesText),
       liveUrl: optional(data.liveUrl),
       sourceCodeUrl: optional(data.sourceCodeUrl),
@@ -354,6 +358,7 @@ export async function saveProject(input: unknown): Promise<ActionResult> {
       });
     }
 
+    await refreshSkillSuggestions(admin.id);
     revalidateContent();
     return { success: true, message: id ? "Project updated." : "Project created." };
   } catch (error) {

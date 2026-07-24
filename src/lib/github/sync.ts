@@ -18,6 +18,7 @@ import {
   GITHUB_ENRICHMENT_VERSION,
 } from "@/lib/github/enrichment";
 import { decryptGitHubToken } from "@/lib/github/token";
+import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 
 const authoredSourceFields = [
   "name",
@@ -1144,6 +1145,7 @@ export async function synchronizeGitHubRepositories(
       };
     });
 
+    await refreshSkillSuggestions(userId);
     return summary;
   } catch (error) {
     const githubError = error instanceof GitHubApiError ? error : null;

@@ -16,6 +16,7 @@ import {
   parseGitHubScopes,
 } from "@/lib/github/scopes";
 import { db } from "@/lib/db";
+import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 import { getServerEnv } from "@/lib/env";
 import {
   githubProjectFieldSchema,
@@ -532,6 +533,7 @@ export async function addRepositoryToPortfolio(
       return { created: true };
     });
 
+    await refreshSkillSuggestions(admin.id);
     revalidateGitHub();
     return {
       success: true,

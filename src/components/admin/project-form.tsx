@@ -35,6 +35,7 @@ const emptyProject: ProjectInput = {
   title: "",
   shortDescription: "",
   longDescription: "",
+  highlightsText: "",
   technologiesText: "",
   liveUrl: "",
   sourceCodeUrl: "",
@@ -114,6 +115,19 @@ export function ProjectForm({
               <Input
                 id={`project-title-${value.id ?? "new"}`}
                 {...form.register("title")}
+              />
+            </FormField>
+            <FormField
+              className="sm:col-span-2"
+              error={form.formState.errors.highlightsText?.message}
+              hint="Enter one project achievement per line."
+              id={`project-highlights-${value.id ?? "new"}`}
+              label="Project achievements"
+            >
+              <Textarea
+                id={`project-highlights-${value.id ?? "new"}`}
+                rows={4}
+                {...form.register("highlightsText")}
               />
             </FormField>
             <FormField

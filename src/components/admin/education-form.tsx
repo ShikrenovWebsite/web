@@ -34,6 +34,7 @@ const emptyEducation: EducationInput = {
   fieldOfStudy: "",
   location: "",
   description: "",
+  achievementsText: "",
   startDate: "",
   endDate: "",
   status: "DRAFT",
@@ -103,6 +104,19 @@ export function EducationForm({
               <Input
                 id={`institution-${value.id ?? "new"}`}
                 {...form.register("institution")}
+              />
+            </FormField>
+            <FormField
+              className="sm:col-span-2"
+              error={form.formState.errors.achievementsText?.message}
+              hint="Enter one achievement per line."
+              id={`education-achievements-${value.id ?? "new"}`}
+              label="Achievements"
+            >
+              <Textarea
+                id={`education-achievements-${value.id ?? "new"}`}
+                rows={3}
+                {...form.register("achievementsText")}
               />
             </FormField>
             <FormField

@@ -132,7 +132,10 @@ export default async function HomePage() {
                         .join(" · ")}
                     </CardDescription>
                   </CardHeader>
-                  {item.description || item.startDate || item.location ? (
+                  {item.description ||
+                  item.achievements.length ||
+                  item.startDate ||
+                  item.location ? (
                     <CardContent className="space-y-2 text-sm text-muted-foreground">
                       {item.startDate ? (
                         <p>
@@ -145,6 +148,13 @@ export default async function HomePage() {
                         <p className="whitespace-pre-line leading-6">
                           {item.description}
                         </p>
+                      ) : null}
+                      {item.achievements.length ? (
+                        <ul className="list-disc space-y-1 pl-5">
+                          {item.achievements.map((achievement) => (
+                            <li key={achievement}>{achievement}</li>
+                          ))}
+                        </ul>
                       ) : null}
                     </CardContent>
                   ) : null}
@@ -200,6 +210,13 @@ export default async function HomePage() {
                       <p className="mb-3 w-full whitespace-pre-line text-sm leading-6 text-muted-foreground">
                         {project.longDescription}
                       </p>
+                    ) : null}
+                    {project.highlights.length ? (
+                      <ul className="mb-3 w-full list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                        {project.highlights.map((highlight) => (
+                          <li key={highlight}>{highlight}</li>
+                        ))}
+                      </ul>
                     ) : null}
                     {project.technologies.length ? (
                       <div className="mb-3 flex w-full flex-wrap gap-2">

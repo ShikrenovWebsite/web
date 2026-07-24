@@ -15,6 +15,33 @@
   --color-ring: var(--ring);
 }
 
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .cv-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .cv-section-title {
+    break-after: avoid;
+  }
+
+  .cv-item,
+  li {
+    break-inside: avoid;
+  }
+}
+
 :root {
   --background: #fafafa;
   --foreground: #171717;

@@ -13,11 +13,6 @@ const sections = {
     description: "Personal information and public biography management.",
     phase: "Phase 2",
   },
-  "cv-import": {
-    title: "CV import",
-    description: "Private upload, extraction, conflict review, and selective import.",
-    phase: "Phase 4",
-  },
   github: {
     title: "GitHub",
     description: "Connection, repository sync, and review queues.",

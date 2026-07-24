@@ -215,8 +215,59 @@ async function main() {
     },
   });
 
+  const [seedExperience, seedProjects, seedEducation, seedSkills] =
+    await Promise.all([
+      prisma.experience.findMany({
+        where: { userId: user.id },
+        orderBy: { displayOrder: "asc" },
+        select: { id: true },
+      }),
+      prisma.portfolioProject.findMany({
+        where: { userId: user.id },
+        orderBy: { displayOrder: "asc" },
+        select: { id: true },
+      }),
+      prisma.education.findMany({
+        where: { userId: user.id },
+        orderBy: { displayOrder: "asc" },
+        select: { id: true },
+      }),
+      prisma.skill.findMany({
+        where: { userId: user.id },
+        orderBy: { displayOrder: "asc" },
+        select: { id: true },
+      }),
+    ]);
+  await prisma.cvVersion.upsert({
+    where: {
+      userId_name: {
+        userId: user.id,
+        name: "General Software Developer",
+      },
+    },
+    update: {},
+    create: {
+      userId: user.id,
+      name: "General Software Developer",
+      selectedExperienceIds: seedExperience.map((item) => item.id),
+      selectedProjectIds: seedProjects.map((item) => item.id),
+      selectedEducationIds: seedEducation.map((item) => item.id),
+      selectedSkillIds: seedSkills.map((item) => item.id),
+      selectedCertificationIds: [],
+      selectedLanguageIds: [],
+      sectionOrder: [
+        "experience",
+        "projects",
+        "education",
+        "skills",
+        "certifications",
+        "languages",
+      ],
+    },
+  });
+
   console.info(`Seeded approved administrator @${githubLogin}.`);
-  console.info("Seeded a mix of published and draft Phase 2 content.");
+  console.info("Seeded portfolio content and a reference-based CV version.");
 }
 
 main()

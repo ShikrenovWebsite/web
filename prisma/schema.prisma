@@ -62,8 +62,12 @@ enum GitHubAccessStatus {
 enum CvUploadStatus {
   UPLOADED
   PROCESSING
+  EXTRACTING
+  EXTRACTED
+  PARSING
   READY_FOR_REVIEW
   IMPORTED
+  PARTIALLY_IMPORTED
   FAILED
 }
 
@@ -93,6 +97,7 @@ enum ImportItemType {
 }
 
 enum ImportResolution {
+  CREATE_NEW
   KEEP_EXISTING
   REPLACE
   MERGE
@@ -105,6 +110,16 @@ enum MediaKind {
   PROJECT_COVER
   PROJECT_GALLERY
   OTHER
+}
+
+enum SkillSuggestionStatus {
+  PENDING
+  ACCEPTED
+  IGNORED
+}
+
+enum CvTemplate {
+  ATS_SINGLE_COLUMN
 }
 
 model User {
@@ -131,6 +146,9 @@ model User {
   githubSyncRuns    GitHubSyncRun[]
   cvUploads         CvUpload[]
   cvImportRuns      CvImportRun[]
+  cvVersions        CvVersion[]
+  cvExportSnapshots CvExportSnapshot[]
+  skillSuggestions  SkillSuggestion[]
   mediaAssets       MediaAsset[]
   siteSettings      SiteSettings?
 }
@@ -201,6 +219,7 @@ model Experience {
   userId            String
   company           String
   role              String
+  employmentType    String?
   location          String?
   description       String?           @db.Text
   highlights        String[]
@@ -228,6 +247,7 @@ model Education {
   fieldOfStudy      String?
   location          String?
   description       String?           @db.Text
+  achievements      String[]          @default([])
   startDate         DateTime?
   endDate           DateTime?
   status            PublicationStatus @default(DRAFT)
@@ -257,7 +277,8 @@ model Skill {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  suggestions SkillSuggestion[]
 
   @@unique([userId, name])
   @@index([userId, status, displayOrder])
@@ -312,6 +333,7 @@ model PortfolioProject {
   slug               String
   shortDescription   String?
   longDescription    String?           @db.Text
+  highlights         String[]          @default([])
   technologies       String[]
   liveUrl            String?
   sourceCodeUrl      String?
@@ -498,19 +520,23 @@ model GitHubSyncItem {
 }
 
 model CvUpload {
-  id              String         @id @default(cuid())
-  userId          String
-  mediaAssetId    String         @unique
-  originalName    String
-  mimeType        String
-  sizeBytes       Int
-  checksum        String
-  status          CvUploadStatus @default(UPLOADED)
-  extractedText   String?        @db.Text
-  extractionError String?        @db.Text
-  isPublic        Boolean        @default(false)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                 String         @id @default(cuid())
+  userId             String
+  mediaAssetId       String         @unique
+  originalName       String
+  mimeType           String
+  sizeBytes          Int
+  checksum           String
+  status             CvUploadStatus @default(UPLOADED)
+  extractedText      String?        @db.Text
+  extractionError    String?        @db.Text
+  extractionWarnings String[]       @default([])
+  pageCount          Int?
+  scannedLikely      Boolean        @default(false)
+  extractedAt        DateTime?
+  isPublic           Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   mediaAsset MediaAsset    @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
@@ -520,17 +546,20 @@ model CvUpload {
 }
 
 model CvImportRun {
-  id             String          @id @default(cuid())
-  userId         String
-  cvUploadId     String
-  status         ImportRunStatus @default(PROCESSING)
-  parserVersion  String
-  structuredData Json?
-  errorMessage   String?         @db.Text
-  startedAt      DateTime        @default(now())
-  completedAt    DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String          @id @default(cuid())
+  userId           String
+  cvUploadId       String
+  status           ImportRunStatus @default(PROCESSING)
+  parserVersion    String
+  structuredData   Json?
+  validationResult Json?
+  importAudit      Json?
+  errorMessage     String?         @db.Text
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  appliedAt        DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   cvUpload CvUpload       @relation(fields: [cvUploadId], references: [id], onDelete: Cascade)
@@ -552,6 +581,7 @@ model CvImportItem {
   existingData     Json?
   duplicateScore   Float?
   createdRecordId  String?
+  appliedAt        DateTime?
   displayOrder     Int               @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -562,20 +592,22 @@ model CvImportItem {
 }
 
 model MediaAsset {
-  id           String    @id @default(cuid())
-  userId       String
-  projectId    String?
-  kind         MediaKind
-  storageKey   String    @unique
-  originalName String
-  mimeType     String
-  sizeBytes    Int
-  checksum     String
-  altText      String?
-  isPrivate    Boolean   @default(true)
-  displayOrder Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  projectId       String?
+  kind            MediaKind
+  storageKey      String    @unique
+  storageProvider String    @default("DATABASE")
+  fileData        Bytes?
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  checksum        String
+  altText         String?
+  isPrivate       Boolean   @default(true)
+  displayOrder    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   project  PortfolioProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -583,6 +615,81 @@ model MediaAsset {
 
   @@index([userId, kind])
   @@index([projectId, displayOrder])
+}
+
+model SkillSuggestion {
+  id              String                @id @default(cuid())
+  userId          String
+  normalizedKey   String
+  displayName     String
+  category        String?
+  sourceTypes     String[]
+  evidence        Json
+  sourceCount     Int                   @default(0)
+  confidence      Float                 @default(0)
+  status          SkillSuggestionStatus @default(PENDING)
+  skillId         String?
+  firstDetectedAt DateTime              @default(now())
+  lastDetectedAt  DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill? @relation(fields: [skillId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, normalizedKey])
+  @@index([userId, status, confidence])
+  @@index([skillId])
+}
+
+model CvVersion {
+  id                       String     @id @default(cuid())
+  userId                   String
+  name                     String
+  customHeadline           String?
+  customSummary            String?    @db.Text
+  selectedExperienceIds    String[]
+  selectedProjectIds       String[]
+  selectedEducationIds     String[]
+  selectedSkillIds         String[]
+  selectedCertificationIds String[]
+  selectedLanguageIds      String[]
+  sectionOrder             String[]
+  itemOrder                Json?
+  visibilitySettings       Json?
+  overrides                Json?
+  template                 CvTemplate @default(ATS_SINGLE_COLUMN)
+  sourceUpdatedAt          DateTime?
+  lastExportedAt           DateTime?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots CvExportSnapshot[]
+
+  @@unique([userId, name])
+  @@index([userId, updatedAt])
+}
+
+model CvExportSnapshot {
+  id                 String   @id @default(cuid())
+  userId             String
+  cvVersionId        String
+  dataSnapshot       Json
+  canonicalUpdatedAt DateTime
+  filename           String
+  mimeType           String   @default("application/pdf")
+  checksum           String
+  sizeBytes          Int
+  pageCount          Int?
+  pdfData            Bytes
+  exportedAt         DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvVersion CvVersion @relation(fields: [cvVersionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, exportedAt])
+  @@index([cvVersionId, exportedAt])
 }
 
 model SiteSettings {

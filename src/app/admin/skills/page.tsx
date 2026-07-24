@@ -2,6 +2,7 @@ import { ContentActions } from "@/components/admin/content-actions";
 import { EmptyState } from "@/components/admin/empty-state";
 import { SectionHeading } from "@/components/admin/section-heading";
 import { SkillForm } from "@/components/admin/skill-form";
+import { SkillSuggestions } from "@/components/admin/skill-suggestions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdminPage } from "@/lib/auth";
@@ -12,10 +13,42 @@ export const metadata = { title: "Skills" };
 
 export default async function SkillsPage() {
   const { admin } = await requireAdminPage();
-  const items = await db.skill.findMany({
-    where: { userId: admin.id },
-    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
-  });
+  const [items, suggestions] = await Promise.all([
+    db.skill.findMany({
+      where: { userId: admin.id },
+      orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+    }),
+    db.skillSuggestion.findMany({
+      where: { userId: admin.id },
+      orderBy: [{ status: "asc" }, { confidence: "desc" }, { displayName: "asc" }],
+    }),
+  ]);
+
+  const suggestionView = suggestions.map((suggestion) => ({
+    id: suggestion.id,
+    displayName: suggestion.displayName,
+    category: suggestion.category,
+    sourceCount: suggestion.sourceCount,
+    confidence: suggestion.confidence,
+    status: suggestion.status,
+    evidence: Array.isArray(suggestion.evidence)
+      ? suggestion.evidence.flatMap((item) =>
+          typeof item === "object" &&
+          item &&
+          "sourceName" in item &&
+          typeof item.sourceName === "string" &&
+          "sourceType" in item &&
+          typeof item.sourceType === "string"
+            ? [
+                {
+                  sourceName: item.sourceName,
+                  sourceType: item.sourceType,
+                },
+              ]
+            : [],
+        )
+      : [],
+  }));
 
   return (
     <div className="space-y-6">
@@ -73,6 +106,7 @@ export default async function SkillsPage() {
           })}
         </div>
       )}
+      <SkillSuggestions suggestions={suggestionView} />
     </div>
   );
 }

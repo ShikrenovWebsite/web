@@ -105,11 +105,11 @@ export default async function AdminDashboardPage() {
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <Badge>Phase 3</Badge>
+          <Badge>Portfolio operations</Badge>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          Manage portfolio content and review GitHub repository source data.
-          CV parsing remains deliberately deferred.
+          Manage canonical portfolio content, GitHub source review, skill
+          suggestions, CV imports, and private exports.
         </p>
       </div>
 
@@ -178,7 +178,8 @@ export default async function AdminDashboardPage() {
           <CardHeader>
             <CardTitle>Quick actions</CardTitle>
             <CardDescription>
-              Create content, synchronize GitHub, or visit the deferred CV import.
+              Create content, synchronize GitHub, import an existing CV, or
+              build a tailored version.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">

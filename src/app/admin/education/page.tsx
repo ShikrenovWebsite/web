@@ -52,6 +52,7 @@ export default async function EducationPage() {
               fieldOfStudy: item.fieldOfStudy ?? "",
               location: item.location ?? "",
               description: item.description ?? "",
+              achievementsText: item.achievements.join("\n"),
               startDate: dateInput(item.startDate),
               endDate: dateInput(item.endDate),
               status: item.status,
