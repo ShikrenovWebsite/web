@@ -211,7 +211,7 @@ function ChangeBadge({ item }: { item: ReviewItem }) {
   const missing = itemRequiredFields(item);
   if (missing.length) {
     return (
-      <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+      <Badge className="border-destructive/30 bg-destructive-muted text-destructive-foreground">
         <AlertTriangle aria-hidden="true" className="size-3" />
         Missing information
       </Badge>
@@ -224,7 +224,7 @@ function ChangeBadge({ item }: { item: ReviewItem }) {
   });
   if (kind === "NEW") {
     return (
-      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+      <Badge className="border-success/30 bg-success-muted text-success-foreground">
         <PlusCircle aria-hidden="true" className="size-3" />
         New
       </Badge>
@@ -232,14 +232,14 @@ function ChangeBadge({ item }: { item: ReviewItem }) {
   }
   if (kind === "MODIFIED") {
     return (
-      <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">
+      <Badge className="border-warning/30 bg-warning-muted text-warning-foreground">
         <CircleDot aria-hidden="true" className="size-3" />
         Modified
       </Badge>
     );
   }
   return (
-    <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+    <Badge>
       <Circle aria-hidden="true" className="size-3" />
       Unchanged
     </Badge>
@@ -280,7 +280,7 @@ function ReviewItemCard({
   }
 
   return (
-    <Card className={missing.length ? "border-red-300" : undefined}>
+    <Card className={missing.length ? "border-destructive/45" : undefined}>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -306,7 +306,7 @@ function ReviewItemCard({
             ) : null}
             {item.classificationConfidence !== null &&
             item.classificationConfidence < 0.75 ? (
-              <Badge className="bg-amber-100 text-amber-900">
+              <Badge className="border-warning/30 bg-warning-muted text-warning-foreground">
                 Low confidence
               </Badge>
             ) : null}
@@ -315,7 +315,7 @@ function ReviewItemCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {missing.length ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <div className="rounded-md border border-destructive/35 bg-destructive-muted p-3 text-sm text-destructive-foreground">
             <p className="font-medium">
               This item contains missing required information.
             </p>
@@ -333,7 +333,7 @@ function ReviewItemCard({
                 : ""}
             </p>
             {item.classificationWarnings.map((warning) => (
-              <p className="mt-1 text-amber-700" key={warning}>
+              <p className="mt-1 text-warning-foreground" key={warning}>
                 {warning}
               </p>
             ))}
@@ -470,7 +470,7 @@ function ContactReview({ item }: { item: ReviewItem | undefined }) {
   return (
     <div
       className={`grid gap-3 rounded-md border p-4 md:grid-cols-2 ${
-        missing.length ? "border-red-300 bg-red-50/40" : ""
+        missing.length ? "border-destructive/45 bg-destructive-muted/40" : ""
       }`}
     >
       <div>
@@ -495,7 +495,7 @@ function ContactReview({ item }: { item: ReviewItem | undefined }) {
           </p>
         ))}
         {missing.length ? (
-          <p className="mt-2 text-sm font-medium text-red-800">
+          <p className="mt-2 text-sm font-medium text-destructive-foreground">
             Missing required information: {missing.join(", ")}.
           </p>
         ) : null}
@@ -679,10 +679,10 @@ function ReviewPanel({
                   <a
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
                       state.complete
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        ? "border-success/35 bg-success-muted text-success-foreground"
                         : state.missing.length
-                          ? "border-red-200 bg-red-50 text-red-800"
-                          : "border-amber-200 bg-amber-50 text-amber-900"
+                          ? "border-destructive/35 bg-destructive-muted text-destructive-foreground"
+                          : "border-warning/35 bg-warning-muted text-warning-foreground"
                     }`}
                     href={`#review-${state.section.toLowerCase()}`}
                     key={state.section}
@@ -705,7 +705,7 @@ function ReviewPanel({
                 role="progressbar"
               >
                 <div
-                  className="h-full rounded-full bg-emerald-600 transition-[width]"
+                  className="h-full rounded-full bg-success transition-[width]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -734,12 +734,12 @@ function ReviewPanel({
             </div>
           </div>
           {!allResolved ? (
-            <p className="text-sm text-amber-800">
+            <p className="text-sm text-warning-foreground">
               Review or ignore the remaining items before publishing.
             </p>
           ) : null}
           {missingSections.length ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            <div className="rounded-md border border-destructive/35 bg-destructive-muted p-3 text-sm text-destructive-foreground">
               <p className="font-medium">
                 This review contains missing required information.
               </p>
@@ -769,11 +769,11 @@ function ReviewPanel({
                 {cvReviewSectionLabel(state.section)}
               </h2>
               <p className="text-sm text-muted-foreground">
-                <span className="text-emerald-700">
+                <span className="text-success">
                   {state.counts.NEW} new
                 </span>{" "}
                 ·{" "}
-                <span className="text-amber-700">
+                <span className="text-warning">
                   {state.counts.MODIFIED} changed
                 </span>{" "}
                 · {state.counts.UNCHANGED} existing
@@ -814,7 +814,7 @@ function ReviewPanel({
             </div>
           </div>
           {state.missing.length ? (
-            <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            <p className="rounded-md border border-destructive/35 bg-destructive-muted p-3 text-sm text-destructive-foreground">
               This section contains missing required information.
             </p>
           ) : null}
@@ -1048,7 +1048,7 @@ function HistoryCard({ upload }: { upload: UploadHistory }) {
             {upload.status === "FAILED" ? (
               <AlertTriangle
                 aria-hidden="true"
-                className="mt-0.5 size-5 text-amber-700"
+                className="mt-0.5 size-5 text-warning"
               />
             ) : (
               <FileText
@@ -1067,7 +1067,7 @@ function HistoryCard({ upload }: { upload: UploadHistory }) {
                 {upload.skippedCount} skipped · {upload.mergedCount} merged
               </p>
               {upload.error ? (
-                <p className="mt-1 text-sm text-amber-700">
+                <p className="mt-1 text-sm text-warning-foreground">
                   {upload.scannedLikely
                     ? "This PDF appears scanned. Upload a text-based PDF or DOCX."
                     : upload.error}
@@ -1100,7 +1100,7 @@ function HistoryCard({ upload }: { upload: UploadHistory }) {
             size="sm"
             variant="outline"
           >
-            <Trash2 aria-hidden="true" className="size-4 text-red-600" />
+            <Trash2 aria-hidden="true" className="size-4 text-destructive" />
             Delete history
           </Button>
         </div>
@@ -1117,7 +1117,7 @@ function HistoryCard({ upload }: { upload: UploadHistory }) {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                className="bg-red-600 text-white hover:bg-red-700"
+                className="bg-destructive text-white hover:bg-destructive/90"
                 onClick={() =>
                   startTransition(async () => {
                     const result = await deleteCvImportHistory({
@@ -1210,7 +1210,7 @@ export function CvImportManager({
                     <p className="mb-2 text-sm font-medium">
                       Unclassified source ranges
                     </p>
-                    <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-md border bg-amber-50 p-3 text-xs text-amber-950">
+                    <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-md border bg-warning-muted p-3 text-xs text-warning-foreground">
                       {JSON.stringify(debug.unclassified, null, 2)}
                     </pre>
                   </div>

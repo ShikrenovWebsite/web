@@ -55,6 +55,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DEFAULT_CV_LAYOUT,
+  defaultCompactCvSelection,
+  type CvLayoutMode,
+} from "@/lib/cv/layout";
 
 type RecordOption = { id: string; label: string; issues: string[] };
 type Options = {
@@ -104,6 +116,7 @@ type CvVersionView = {
   exportCount: number;
   newerDataAvailable: boolean;
   snapshots: ExportSnapshotView[];
+  layoutMode: CvLayoutMode;
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -180,17 +193,17 @@ function SelectionGroup({
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{option.label}</span>
                   {option.issues.length ? (
-                    <Badge className="shrink-0 bg-amber-100 text-amber-900">
+                    <Badge className="shrink-0 border-warning/30 bg-warning-muted text-warning-foreground">
                       Needs details
                     </Badge>
                   ) : (
-                    <Badge className="shrink-0 bg-emerald-100 text-emerald-800">
+                    <Badge className="shrink-0 border-success/30 bg-success-muted text-success-foreground">
                       Ready
                     </Badge>
                   )}
                 </span>
                 {option.issues.length ? (
-                  <span className="mt-0.5 block whitespace-normal text-xs text-amber-800">
+                  <span className="mt-0.5 block whitespace-normal text-xs text-warning-foreground">
                     {option.issues.join(" · ")}
                   </span>
                 ) : null}
@@ -305,41 +318,27 @@ function CvVersionForm({
   );
   const [headline, setHeadline] = useState(version?.customHeadline ?? "");
   const [summary, setSummary] = useState(version?.customSummary ?? "");
+  const compactDefaults = defaultCompactCvSelection(options);
   const [experience, setExperience] = useState(
-    version?.selectedExperienceIds ??
-      options.experience
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedExperienceIds ?? compactDefaults.experience,
   );
   const [projects, setProjects] = useState(
-    version?.selectedProjectIds ??
-      options.projects
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedProjectIds ?? compactDefaults.projects,
   );
   const [education, setEducation] = useState(
-    version?.selectedEducationIds ??
-      options.education
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedEducationIds ?? compactDefaults.education,
   );
   const [skills, setSkills] = useState(
-    version?.selectedSkillIds ??
-      options.skills
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedSkillIds ?? compactDefaults.skills,
   );
   const [certifications, setCertifications] = useState(
-    version?.selectedCertificationIds ??
-      options.certifications
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedCertificationIds ?? compactDefaults.certifications,
   );
   const [languages, setLanguages] = useState(
-    version?.selectedLanguageIds ??
-      options.languages
-        .filter((item) => item.issues.length === 0)
-        .map((item) => item.id),
+    version?.selectedLanguageIds ?? compactDefaults.languages,
+  );
+  const [layoutMode, setLayoutMode] = useState<CvLayoutMode>(
+    version?.layoutMode ?? DEFAULT_CV_LAYOUT,
   );
   const [sectionOrder, setSectionOrder] = useState(
     version?.sectionOrder ?? DEFAULT_SECTION_ORDER,
@@ -371,6 +370,7 @@ function CvVersionForm({
         selectedCertificationIds: certifications,
         selectedLanguageIds: languages,
         contactFields,
+        layoutMode,
         sectionOrder,
         overridesJson,
       });
@@ -412,20 +412,20 @@ function CvVersionForm({
           <div
             className={`rounded-lg border p-3 ${
               profile.issues.length
-                ? "border-amber-300 bg-amber-50"
-                : "border-emerald-200 bg-emerald-50"
+                ? "border-warning/40 bg-warning-muted"
+                : "border-success/35 bg-success-muted"
             }`}
           >
             <div className="flex items-start gap-2">
               {profile.issues.length ? (
                 <TriangleAlert
                   aria-hidden="true"
-                  className="mt-0.5 size-4 text-amber-800"
+                  className="mt-0.5 size-4 text-warning"
                 />
               ) : (
                 <CheckCircle2
                   aria-hidden="true"
-                  className="mt-0.5 size-4 text-emerald-700"
+                  className="mt-0.5 size-4 text-success"
                 />
               )}
               <div>
@@ -469,6 +469,50 @@ function CvVersionForm({
               creates a CV-specific override.
             </span>
           </Label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Label className="grid gap-1.5">
+              Page layout
+              <Select
+                onValueChange={(value) => setLayoutMode(value as CvLayoutMode)}
+                value={layoutMode}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="COMPACT_ONE_PAGE">
+                    Compact one-page
+                  </SelectItem>
+                  <SelectItem value="STANDARD_TWO_PAGE">
+                    Comfortable two-page
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">
+                Text never shrinks below a professional readable size.
+              </span>
+            </Label>
+            <div
+              className={`rounded-lg border p-3 text-sm ${
+                layoutMode === "COMPACT_ONE_PAGE" &&
+                (experience.length > 2 ||
+                  projects.length > 2 ||
+                  skills.length > 18)
+                  ? "border-warning/35 bg-warning-muted text-warning-foreground"
+                  : "bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              <p className="font-medium text-foreground">Layout guidance</p>
+              <p className="mt-1 text-xs leading-5">
+                {layoutMode === "COMPACT_ONE_PAGE" &&
+                (experience.length > 2 ||
+                  projects.length > 2 ||
+                  skills.length > 18)
+                  ? "This selection may exceed one page. Exclude lower-priority records, shorten CV-specific copy, or use the two-page layout."
+                  : "The focused selection is suitable for the compact layout. The preview confirms the final page count."}
+              </p>
+            </div>
+          </div>
           <fieldset className="rounded-lg border p-3">
             <legend className="px-1 text-sm font-medium">Contact details</legend>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -642,7 +686,7 @@ export function CvBuilder({
               </CardHeader>
               <CardContent className="space-y-4">
                 {version.newerDataAvailable ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  <div className="rounded-md border border-warning/35 bg-warning-muted p-3 text-sm text-warning-foreground">
                     <p className="font-medium">
                       Newer portfolio data is available for this CV.
                     </p>
@@ -735,7 +779,7 @@ export function CvBuilder({
                               {snapshot.checksumLabel}
                             </p>
                             {snapshot.newerDataAvailable ? (
-                              <p className="mt-1 text-xs text-amber-800">
+                              <p className="mt-1 text-xs text-warning-foreground">
                                 Newer portfolio data is available.
                               </p>
                             ) : null}

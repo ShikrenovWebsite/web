@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_CV_LAYOUT } from "@/lib/cv/layout";
 
 export const databaseCuidSchema = z.string().trim().cuid();
 
@@ -35,6 +36,9 @@ export const cvVersionInputSchema = z.object({
   selectedCertificationIds: z.array(portfolioRecordIdSchema).max(100),
   selectedLanguageIds: z.array(portfolioRecordIdSchema).max(100),
   contactFields: z.array(contactFieldSchema).max(5),
+  layoutMode: z
+    .enum(["COMPACT_ONE_PAGE", "STANDARD_TWO_PAGE"])
+    .default(DEFAULT_CV_LAYOUT),
   sectionOrder: z
     .array(
       z.enum([

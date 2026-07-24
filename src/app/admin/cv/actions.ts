@@ -112,6 +112,7 @@ export async function saveCvVersion(
     customHeadline,
     customSummary,
     contactFields,
+    layoutMode,
     overridesJson: _overridesJson,
     ...data
   } = parsed.data;
@@ -121,7 +122,7 @@ export async function saveCvVersion(
     customHeadline: customHeadline || null,
     customSummary: customSummary || null,
     overrides: overrides as object,
-    visibilitySettings: { contactFields },
+    visibilitySettings: { contactFields, layoutMode },
     sourceUpdatedAt: await canonicalUpdatedAtForUser(admin.id),
   };
 

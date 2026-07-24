@@ -1,9 +1,15 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import {
+  PDFDocument,
+  PDFName,
+  PDFString,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 import type { CvDocumentData } from "@/lib/cv/document";
 
 const A4 = { width: 595.28, height: 841.89 };
-const margin = 48;
-const contentWidth = A4.width - margin * 2;
 
 function wrap(text: string, font: PDFFont, size: number, width: number) {
   function splitLongWord(word: string) {
@@ -23,8 +29,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
     return chunks;
   }
 
-  const paragraphs = text.split(/\r?\n/);
-  return paragraphs.flatMap((paragraph, paragraphIndex) => {
+  return text.split(/\r?\n/).flatMap((paragraph, paragraphIndex, paragraphs) => {
     const words = paragraph
       .trim()
       .split(/\s+/)
@@ -48,98 +53,73 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
 }
 
 export async function generateCvPdf(data: CvDocumentData) {
+  const compact = data.version.layoutMode === "COMPACT_ONE_PAGE";
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${data.profile.fullName} - ${data.version.name}`);
   pdf.setAuthor(data.profile.fullName);
   pdf.setSubject("Curriculum Vitae");
   pdf.setCreator("Portfolio CV Builder");
+
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  let page = pdf.addPage([A4.width, A4.height]);
-  let y = A4.height - margin;
+  const margin = compact ? 28.35 : 39.7;
+  const bodySize = compact ? 8.35 : 9.15;
+  const lineHeight = bodySize * (compact ? 1.28 : 1.34);
+  const contentWidth = A4.width - margin * 2;
+  const gap = compact ? 17 : 22;
+  const sideWidth = compact ? 156 : 164;
+  const mainWidth = contentWidth - gap - sideWidth;
+  const pages: PDFPage[] = [];
 
-  function newPage() {
-    page = pdf.addPage([A4.width, A4.height]);
-    y = A4.height - margin;
+  function pageAt(index: number) {
+    while (!pages[index]) pages.push(pdf.addPage([A4.width, A4.height]));
+    return pages[index];
   }
 
-  function ensure(height: number) {
-    if (y - height < margin) newPage();
-  }
-
-  function lines(
-    value: string,
-    options: {
-      font?: PDFFont;
-      size?: number;
-      color?: ReturnType<typeof rgb>;
-      indent?: number;
-      gapAfter?: number;
-    } = {},
+  function addLink(
+    page: PDFPage,
+    url: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
   ) {
-    const font = options.font ?? regular;
-    const size = options.size ?? 9.5;
-    const indent = options.indent ?? 0;
-    const lineHeight = size * 1.35;
-    const wrapped = wrap(value, font, size, contentWidth - indent);
-    ensure(Math.max(lineHeight, wrapped.length * lineHeight));
-    for (const line of wrapped) {
-      page.drawText(line, {
-        x: margin + indent,
-        y,
-        size,
-        font,
-        color: options.color ?? rgb(0.12, 0.12, 0.12),
-      });
-      y -= lineHeight;
-    }
-    y -= options.gapAfter ?? 0;
+    const annotation = pdf.context.register(
+      pdf.context.obj({
+        Type: PDFName.of("Annot"),
+        Subtype: PDFName.of("Link"),
+        Rect: [x, y - 2, x + width, y + height],
+        Border: [0, 0, 0],
+        A: {
+          Type: PDFName.of("Action"),
+          S: PDFName.of("URI"),
+          URI: PDFString.of(url),
+        },
+      }),
+    );
+    page.node.addAnnot(annotation);
   }
 
-  function section(title: string, firstItemHeight = 38) {
-    ensure(38 + firstItemHeight);
-    y -= 8;
-    lines(title.toUpperCase(), { font: bold, size: 10, gapAfter: 3 });
-    page.drawLine({
-      start: { x: margin, y: y + 2 },
-      end: { x: A4.width - margin, y: y + 2 },
-      thickness: 0.7,
+  const firstPage = pageAt(0);
+  let headerY = A4.height - margin;
+  firstPage.drawText(data.profile.fullName || "Curriculum Vitae", {
+    x: margin,
+    y: headerY,
+    size: compact ? 22 : 23,
+    font: bold,
+    color: rgb(0.07, 0.07, 0.07),
+  });
+  headerY -= compact ? 17 : 19;
+  if (data.version.headline) {
+    firstPage.drawText(data.version.headline, {
+      x: margin,
+      y: headerY,
+      size: compact ? 10.25 : 11,
+      font: regular,
       color: rgb(0.2, 0.2, 0.2),
     });
-    y -= 13;
   }
 
-  function bullets(values: string[]) {
-    for (const value of values) {
-      const wrapped = wrap(value, regular, 9.25, contentWidth - 14);
-      ensure(wrapped.length * 12.5 + 2);
-      page.drawText("-", { x: margin + 2, y, size: 9.25, font: regular });
-      for (const line of wrapped) {
-        page.drawText(line, {
-          x: margin + 14,
-          y,
-          size: 9.25,
-          font: regular,
-          color: rgb(0.12, 0.12, 0.12),
-        });
-        y -= 12.5;
-      }
-      y -= 1;
-    }
-  }
-
-  lines(data.profile.fullName || "Curriculum Vitae", {
-    font: bold,
-    size: 22,
-    gapAfter: 2,
-  });
-  if (data.version.headline) {
-    lines(data.version.headline, {
-      size: 11,
-      color: rgb(0.25, 0.25, 0.25),
-      gapAfter: 5,
-    });
-  }
   const contact = [
     data.profile.email,
     data.profile.phone,
@@ -147,97 +127,397 @@ export async function generateCvPdf(data: CvDocumentData) {
     data.profile.website,
     ...data.profile.links,
   ].filter(Boolean);
-  if (contact.length) lines(contact.join(" | "), { size: 8.5, gapAfter: 7 });
-  if (data.version.summary) lines(data.version.summary, { gapAfter: 4 });
-
-  for (const sectionName of data.version.sectionOrder) {
-    if (sectionName === "experience" && data.experience.length) {
-      section("Experience", 52);
-      for (const item of data.experience) {
-        ensure(52);
-        lines(`${item.role} - ${item.company}`, { font: bold, size: 10.5 });
-        lines(
-          [item.location, [item.startDate, item.endDate].filter(Boolean).join(" - ")]
-            .filter(Boolean)
-            .join(" | "),
-          { size: 8.5, color: rgb(0.35, 0.35, 0.35), gapAfter: 2 },
-        );
-        if (item.description) lines(item.description, { gapAfter: 2 });
-        bullets(item.highlights);
-        y -= 5;
-      }
-    } else if (sectionName === "projects" && data.projects.length) {
-      section("Projects", 48);
-      for (const item of data.projects) {
-        ensure(48);
-        lines(item.title, { font: bold, size: 10.5 });
-        if (item.shortDescription) lines(item.shortDescription);
-        if (item.longDescription) lines(item.longDescription);
-        if (item.technologies.length) {
-          lines(`Technologies: ${item.technologies.join(", ")}`, {
-            size: 8.75,
-            gapAfter: 2,
-          });
-        }
-        bullets(item.highlights);
-        const links = [item.liveUrl, item.sourceCodeUrl].filter(Boolean);
-        if (links.length) lines(links.join(" | "), { size: 8 });
-        y -= 5;
-      }
-    } else if (sectionName === "education" && data.education.length) {
-      section("Education", 42);
-      for (const item of data.education) {
-        ensure(42);
-        lines(
-          [item.qualification, item.fieldOfStudy].filter(Boolean).join(", ") ||
-            item.institution,
-          { font: bold, size: 10.5 },
-        );
-        if (item.qualification || item.fieldOfStudy) {
-          lines(item.institution, { size: 9.5 });
-        }
-        lines([item.startDate, item.endDate].filter(Boolean).join(" - "), {
-          size: 8.5,
-          color: rgb(0.35, 0.35, 0.35),
-        });
-        if (item.description) lines(item.description);
-        y -= 5;
-      }
-    } else if (sectionName === "skills" && data.skills.length) {
-      section("Skills");
-      const categories = new Map<string, typeof data.skills>();
-      for (const skill of data.skills) {
-        const category = skill.category || "Skills";
-        categories.set(category, [...(categories.get(category) ?? []), skill]);
-      }
-      for (const [category, skills] of categories) {
-        lines(`${category}: ${skills.map((skill) => skill.name).join(", ")}`, {
-          size: 9.25,
-          gapAfter: 2,
-        });
-      }
-    } else if (
-      sectionName === "certifications" &&
-      data.certifications.length
+  const contactWidth = compact ? 210 : 225;
+  const contactRows: string[][] = [];
+  let currentRow: string[] = [];
+  for (const item of contact) {
+    const candidate = [...currentRow, item].join(" | ");
+    if (
+      currentRow.length &&
+      regular.widthOfTextAtSize(candidate, 7.1) > contactWidth
     ) {
-      section("Certifications");
-      for (const item of data.certifications) {
-        lines([item.name, item.issuer].filter(Boolean).join(" - "));
+      contactRows.push(currentRow);
+      currentRow = [item];
+    } else {
+      currentRow.push(item);
+    }
+  }
+  if (currentRow.length) contactRows.push(currentRow);
+  let contactY = A4.height - margin;
+  for (const row of contactRows) {
+    const rowText = row.join(" | ");
+    let contactX =
+      A4.width - margin - regular.widthOfTextAtSize(rowText, 7.1);
+    row.forEach((item, index) => {
+      if (index) {
+        firstPage.drawText(" | ", {
+          x: contactX,
+          y: contactY,
+          size: 7.1,
+          font: regular,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+        contactX += regular.widthOfTextAtSize(" | ", 7.1);
       }
-    } else if (sectionName === "languages" && data.languages.length) {
-      section("Languages");
-      lines(
-        data.languages
-          .map((item) =>
-            [item.name, item.proficiency].filter(Boolean).join(" - "),
-          )
-          .join(", "),
-      );
+      firstPage.drawText(item, {
+        x: contactX,
+        y: contactY,
+        size: 7.1,
+        font: regular,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      if (item.startsWith("http") || item.includes("@")) {
+        addLink(
+          firstPage,
+          item.startsWith("http") ? item : `mailto:${item}`,
+          contactX,
+          contactY,
+          regular.widthOfTextAtSize(item, 7.1),
+          7.1,
+        );
+      }
+      contactX += regular.widthOfTextAtSize(item, 7.1);
+    });
+    contactY -= 9;
+  }
+
+  const ruleY = Math.min(headerY - 6, contactY - 2);
+  firstPage.drawLine({
+    start: { x: margin, y: ruleY },
+    end: { x: A4.width - margin, y: ruleY },
+    thickness: 0.8,
+    color: rgb(0.12, 0.12, 0.12),
+  });
+
+  let contentStartY = ruleY - (compact ? 11 : 14);
+  if (data.version.summary) {
+    const summaryLines = wrap(
+      data.version.summary,
+      regular,
+      bodySize,
+      contentWidth,
+    );
+    for (const line of summaryLines) {
+      firstPage.drawText(line, {
+        x: margin,
+        y: contentStartY,
+        size: bodySize,
+        font: regular,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+      contentStartY -= lineHeight;
+    }
+    contentStartY -= compact ? 7 : 10;
+  }
+
+  type Writer = {
+    x: number;
+    width: number;
+    pageIndex: number;
+    y: number;
+  };
+  const main: Writer = {
+    x: margin,
+    width: mainWidth,
+    pageIndex: 0,
+    y: contentStartY,
+  };
+  const side: Writer = {
+    x: margin + mainWidth + gap,
+    width: sideWidth,
+    pageIndex: 0,
+    y: contentStartY,
+  };
+
+  function ensure(writer: Writer, height: number) {
+    if (writer.y - height >= margin) return;
+    writer.pageIndex += 1;
+    writer.y = A4.height - margin;
+    pageAt(writer.pageIndex);
+  }
+
+  function drawWrapped(
+    writer: Writer,
+    value: string,
+    options: {
+      font?: PDFFont;
+      size?: number;
+      color?: ReturnType<typeof rgb>;
+      indent?: number;
+      gapAfter?: number;
+      link?: string;
+      ensureSpace?: boolean;
+    } = {},
+  ) {
+    const font = options.font ?? regular;
+    const size = options.size ?? bodySize;
+    const indent = options.indent ?? 0;
+    const height = size * (compact ? 1.28 : 1.34);
+    const lines = wrap(value, font, size, writer.width - indent);
+    if (options.ensureSpace !== false) ensure(writer, lines.length * height);
+    for (const line of lines) {
+      const page = pageAt(writer.pageIndex);
+      page.drawText(line, {
+        x: writer.x + indent,
+        y: writer.y,
+        size,
+        font,
+        color: options.color ?? rgb(0.1, 0.1, 0.1),
+      });
+      if (options.link) {
+        addLink(
+          page,
+          options.link,
+          writer.x + indent,
+          writer.y,
+          font.widthOfTextAtSize(line, size),
+          size,
+        );
+      }
+      writer.y -= height;
+    }
+    writer.y -= options.gapAfter ?? 0;
+  }
+
+  function section(writer: Writer, title: string, firstItemHeight = 28) {
+    const headingHeight = compact ? 20 : 23;
+    ensure(writer, headingHeight + firstItemHeight);
+    drawWrapped(writer, title.toUpperCase(), {
+      font: bold,
+      size: compact ? 7.8 : 8.4,
+      gapAfter: 3,
+      ensureSpace: false,
+    });
+    const page = pageAt(writer.pageIndex);
+    page.drawLine({
+      start: { x: writer.x, y: writer.y + 1.5 },
+      end: { x: writer.x + writer.width, y: writer.y + 1.5 },
+      thickness: 0.55,
+      color: rgb(0.18, 0.18, 0.18),
+    });
+    writer.y -= compact ? 7 : 9;
+  }
+
+  function measureText(
+    value: string,
+    width: number,
+    size = bodySize,
+    font = regular,
+  ) {
+    return wrap(value, font, size, width).length *
+      size *
+      (compact ? 1.28 : 1.34);
+  }
+
+  function bullets(writer: Writer, values: string[]) {
+    for (const value of values) {
+      const bulletIndent = 11;
+      const height = measureText(value, writer.width - bulletIndent) + 1;
+      ensure(writer, height);
+      const page = pageAt(writer.pageIndex);
+      page.drawText("-", {
+        x: writer.x + 1,
+        y: writer.y,
+        size: bodySize,
+        font: regular,
+      });
+      drawWrapped(writer, value, {
+        indent: bulletIndent,
+        gapAfter: 1,
+        ensureSpace: false,
+      });
     }
   }
 
+  if (data.experience.length) {
+    section(main, "Experience", 44);
+    for (const item of data.experience) {
+      const metadata = [
+        item.location,
+        [item.startDate, item.endDate].filter(Boolean).join(" - "),
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      const itemHeight =
+        measureText(`${item.role} - ${item.company}`, main.width, bodySize, bold) +
+        measureText(metadata, main.width, compact ? 7.3 : 7.8) +
+        measureText(item.description, main.width) +
+        item.highlights.reduce(
+          (height, value) =>
+            height + measureText(value, main.width - 11) + 1,
+          0,
+        ) +
+        (compact ? 7 : 10);
+      ensure(main, itemHeight);
+      drawWrapped(main, `${item.role} - ${item.company}`, {
+        font: bold,
+        gapAfter: 1,
+        ensureSpace: false,
+      });
+      if (metadata) {
+        drawWrapped(main, metadata, {
+          size: compact ? 7.3 : 7.8,
+          color: rgb(0.35, 0.35, 0.35),
+          gapAfter: 2,
+          ensureSpace: false,
+        });
+      }
+      if (item.description) {
+        drawWrapped(main, item.description, {
+          gapAfter: 2,
+          ensureSpace: false,
+        });
+      }
+      bullets(main, item.highlights);
+      main.y -= compact ? 5 : 8;
+    }
+  }
+
+  if (data.projects.length) {
+    section(main, "Selected projects", 40);
+    for (const item of data.projects) {
+      const itemHeight =
+        measureText(item.title, main.width, bodySize, bold) +
+        measureText(item.shortDescription, main.width) +
+        measureText(item.longDescription, main.width) +
+        measureText(
+          item.technologies.length
+            ? `Stack: ${item.technologies.join(", ")}`
+            : "",
+          main.width,
+          compact ? 7.3 : 7.8,
+        ) +
+        item.highlights.reduce(
+          (height, value) =>
+            height + measureText(value, main.width - 11) + 1,
+          0,
+        ) +
+        (compact ? 9 : 12);
+      ensure(main, itemHeight);
+      drawWrapped(main, item.title, {
+        font: bold,
+        gapAfter: 1,
+        ensureSpace: false,
+      });
+      if (item.shortDescription) {
+        drawWrapped(main, item.shortDescription, { ensureSpace: false });
+      }
+      if (item.longDescription) {
+        drawWrapped(main, item.longDescription, {
+          gapAfter: 2,
+          ensureSpace: false,
+        });
+      }
+      bullets(main, item.highlights);
+      if (item.technologies.length) {
+        drawWrapped(main, `Stack: ${item.technologies.join(", ")}`, {
+          size: compact ? 7.3 : 7.8,
+          gapAfter: 2,
+          ensureSpace: false,
+        });
+      }
+      for (const url of [item.liveUrl, item.sourceCodeUrl].filter(Boolean)) {
+        drawWrapped(main, url, {
+          size: 6.8,
+          color: rgb(0.1, 0.2, 0.45),
+          link: url,
+          ensureSpace: false,
+        });
+      }
+      main.y -= compact ? 5 : 8;
+    }
+  }
+
+  if (data.education.length) {
+    section(side, "Education", 34);
+    for (const item of data.education) {
+      ensure(side, 34);
+      drawWrapped(
+        side,
+        [item.qualification, item.fieldOfStudy].filter(Boolean).join(", ") ||
+          item.institution,
+        { font: bold, ensureSpace: false },
+      );
+      if (item.qualification || item.fieldOfStudy) {
+        drawWrapped(side, item.institution, { ensureSpace: false });
+      }
+      drawWrapped(
+        side,
+        [item.startDate, item.endDate].filter(Boolean).join(" - "),
+        {
+          size: 7,
+          color: rgb(0.35, 0.35, 0.35),
+          gapAfter: 2,
+          ensureSpace: false,
+        },
+      );
+      if (item.description) {
+        drawWrapped(side, item.description, {
+          gapAfter: compact ? 5 : 8,
+          ensureSpace: false,
+        });
+      }
+    }
+  }
+
+  if (data.skills.length) {
+    section(side, "Skills", 30);
+    const categories = new Map<string, typeof data.skills>();
+    for (const skill of data.skills) {
+      const category = skill.category || "Skills";
+      categories.set(category, [...(categories.get(category) ?? []), skill]);
+    }
+    for (const [category, skills] of categories) {
+      drawWrapped(side, category, { font: bold, ensureSpace: true });
+      drawWrapped(side, skills.map((skill) => skill.name).join(", "), {
+        gapAfter: compact ? 4 : 6,
+      });
+    }
+  }
+
+  if (data.certifications.length) {
+    section(side, "Certifications", 24);
+    for (const item of data.certifications) {
+      drawWrapped(side, [item.name, item.issuer].filter(Boolean).join(" - "), {
+        gapAfter: 2,
+      });
+    }
+  }
+
+  if (data.languages.length) {
+    section(side, "Languages", 20);
+    drawWrapped(
+      side,
+      data.languages
+        .map((item) =>
+          [item.name, item.proficiency].filter(Boolean).join(" - "),
+        )
+        .join(", "),
+    );
+  }
+
+  for (let index = 0; index < pages.length; index += 1) {
+    pages[index].drawLine({
+      start: {
+        x: margin + mainWidth + gap / 2,
+        y: index === 0 ? contentStartY : A4.height - margin,
+      },
+      end: { x: margin + mainWidth + gap / 2, y: margin },
+      thickness: 0.35,
+      color: rgb(0.78, 0.78, 0.78),
+    });
+    if (index === 0) continue;
+    pages[index].drawText(`${data.profile.fullName} · ${data.version.headline}`, {
+      x: margin,
+      y: A4.height - margin + 10,
+      size: 7,
+      font: regular,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+  }
+
   const bytes = Buffer.from(await pdf.save({ useObjectStreams: false }));
-  return { bytes, pageCount: pdf.getPageCount() };
+  return { bytes, pageCount: pages.length };
 }
 
 export function cvFilename(fullName: string, versionName: string) {

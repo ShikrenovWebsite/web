@@ -158,7 +158,7 @@ export function ContentActions({
                 className="size-4 animate-spin"
               />
             ) : (
-              <Trash2 aria-hidden="true" className="size-4 text-red-600" />
+              <Trash2 aria-hidden="true" className="size-4 text-destructive" />
             )}
           </Button>
         </AlertDialogTrigger>
@@ -172,7 +172,7 @@ export function ContentActions({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-destructive text-white hover:bg-destructive/90"
               onClick={(event) => {
                 event.preventDefault();
                 run(async () => {

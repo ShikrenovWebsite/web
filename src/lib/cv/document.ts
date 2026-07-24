@@ -2,6 +2,11 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { databaseCuidSchema } from "@/lib/cv/version-input";
+import {
+  DEFAULT_CV_LAYOUT,
+  estimateCompactCvFit,
+  type CvLayoutMode,
+} from "@/lib/cv/layout";
 
 export type CvDocumentData = {
   version: {
@@ -13,6 +18,8 @@ export type CvDocumentData = {
     updatedAt: string;
     sourceUpdatedAt: string;
     newerDataAvailable: boolean;
+    layoutMode: CvLayoutMode;
+    fit: ReturnType<typeof estimateCompactCvFit>;
   };
   profile: {
     fullName: string;
@@ -223,7 +230,16 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
         )
       : new Set(["email", "phone", "location", "website", "links"]);
 
-  return {
+  const layoutMode =
+    typeof version.visibilitySettings === "object" &&
+    version.visibilitySettings &&
+    !Array.isArray(version.visibilitySettings) &&
+    "layoutMode" in version.visibilitySettings &&
+    version.visibilitySettings.layoutMode === "STANDARD_TWO_PAGE"
+      ? "STANDARD_TWO_PAGE"
+      : DEFAULT_CV_LAYOUT;
+
+  const document = {
     version: {
       id: version.id,
       name: version.name,
@@ -236,6 +252,7 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
       newerDataAvailable:
         !version.sourceUpdatedAt ||
         canonicalUpdatedAt > version.sourceUpdatedAt,
+      layoutMode,
     },
     profile: {
       fullName: profile?.fullName ?? "",
@@ -298,5 +315,16 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
       proficiency: item.proficiency ?? "",
     })),
     canonicalUpdatedAt: canonicalUpdatedAt.toISOString(),
+  };
+
+  return {
+    ...document,
+    version: {
+      ...document.version,
+      fit: estimateCompactCvFit({
+        ...document,
+        summary: document.version.summary,
+      }),
+    },
   } satisfies CvDocumentData;
 }

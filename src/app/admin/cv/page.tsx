@@ -167,6 +167,14 @@ export default async function CvBuilderPage() {
             newerDataAvailable:
               canonicalUpdatedAt > snapshot.canonicalUpdatedAt,
           })),
+          layoutMode:
+            typeof version.visibilitySettings === "object" &&
+            version.visibilitySettings &&
+            !Array.isArray(version.visibilitySettings) &&
+            "layoutMode" in version.visibilitySettings &&
+            version.visibilitySettings.layoutMode === "STANDARD_TWO_PAGE"
+              ? "STANDARD_TWO_PAGE"
+              : "COMPACT_ONE_PAGE",
         }))}
       />
     </div>

@@ -363,7 +363,7 @@ function RepositoryBody({ repository }: { repository: Repository }) {
       ) : null}
       {repository.enrichmentError ? (
         <div
-          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+          className="rounded-lg border border-warning/35 bg-warning-muted p-3 text-sm text-warning-foreground"
           role="alert"
         >
           Repository content could not be fully analyzed:{" "}
@@ -514,7 +514,7 @@ function OwnerCard({ owner }: { owner: GitHubOwner }) {
               inspection {owner.lastSuccessfulSyncAtLabel}
             </p>
             {owner.accessMessage ? (
-              <p className="mt-2 text-xs text-amber-700">{owner.accessMessage}</p>
+              <p className="mt-2 text-xs text-warning-foreground">{owner.accessMessage}</p>
             ) : null}
           </div>
         </div>
@@ -948,7 +948,7 @@ function UnavailableActions({ repository }: { repository: Repository }) {
 
   return (
     <div className="space-y-3 border-t p-4">
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      <div className="flex gap-2 rounded-lg border border-warning/35 bg-warning-muted p-3 text-sm text-warning-foreground">
         <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         <p>
           GitHub source unavailable:{" "}
@@ -1121,7 +1121,7 @@ export function GitHubManager({ connection }: { connection: Connection | null })
         <>
           {!storedScopeReady ? (
             <div
-              className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-4 rounded-lg border border-warning/35 bg-warning-muted p-4 text-sm text-warning-foreground sm:flex-row sm:items-center sm:justify-between"
               role="alert"
             >
               <div>
@@ -1275,8 +1275,8 @@ export function GitHubManager({ connection }: { connection: Connection | null })
             <div
               className={`rounded-lg border p-4 text-sm ${
                 connection.latestRun.status === "FAILED"
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
+                  ? "border-destructive/35 bg-destructive-muted text-destructive-foreground"
+                  : "border-warning/35 bg-warning-muted text-warning-foreground"
               }`}
               role="alert"
             >

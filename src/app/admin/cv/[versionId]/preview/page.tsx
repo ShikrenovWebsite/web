@@ -6,6 +6,7 @@ import { CvPreview } from "@/components/admin/cv-preview";
 import { Button } from "@/components/ui/button";
 import { requireAdminPage } from "@/lib/auth";
 import { getCvDocumentData } from "@/lib/cv/document";
+import { generateCvPdf } from "@/lib/cv/pdf";
 import { databaseCuidSchema } from "@/lib/cv/version-input";
 
 export const metadata = { title: "CV preview" };
@@ -23,6 +24,10 @@ export default async function CvPreviewPage({
   if (!databaseCuidSchema.safeParse(versionId).success) notFound();
   const data = await getCvDocumentData(admin.id, versionId);
   if (!data) notFound();
+  const previewPdf = await generateCvPdf(data);
+  const exceedsCompactPage =
+    data.version.layoutMode === "COMPACT_ONE_PAGE" &&
+    previewPdf.pageCount > 1;
 
   return (
     <div className="space-y-4">
@@ -36,7 +41,12 @@ export default async function CvPreviewPage({
           </Button>
           <h1 className="text-xl font-semibold">{data.version.name}</h1>
           <p className="text-sm text-muted-foreground">
-            A4 ATS-friendly preview using saved selections and overrides.
+            A4 ATS-friendly preview · {previewPdf.pageCount} page
+            {previewPdf.pageCount === 1 ? "" : "s"} ·{" "}
+            {data.version.layoutMode === "COMPACT_ONE_PAGE"
+              ? "compact"
+              : "comfortable"}{" "}
+            layout
           </p>
         </div>
         <Button asChild>
@@ -47,7 +57,7 @@ export default async function CvPreviewPage({
         </Button>
       </div>
       {data.version.newerDataAvailable ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 print:hidden sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-lg border border-warning/35 bg-warning-muted p-4 text-sm text-warning-foreground print:hidden sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-medium">
               Newer portfolio data is available for this CV.
@@ -68,6 +78,24 @@ export default async function CvPreviewPage({
               Refresh from portfolio
             </Button>
           </form>
+        </div>
+      ) : null}
+      {exceedsCompactPage ? (
+        <div className="cv-fit-warning flex flex-col gap-3 rounded-lg border border-warning/35 bg-warning-muted p-4 text-sm text-warning-foreground print:hidden sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium">
+              This selection needs {previewPdf.pageCount} pages at a readable
+              type size.
+            </p>
+            <p className="mt-1 text-xs leading-5">
+              Exclude lower-priority records, shorten CV-specific summaries or
+              bullets, or switch this version to the comfortable two-page
+              layout.
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/admin/cv">Adjust CV selection</Link>
+          </Button>
         </div>
       ) : null}
       <CvPreview data={data} />

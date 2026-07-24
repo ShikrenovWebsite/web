@@ -37,7 +37,7 @@ export default async function SignInPage({
         <CardContent>
           {params.error ? (
             <p
-              className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              className="mb-4 rounded-md border border-destructive/35 bg-destructive-muted p-3 text-sm text-destructive-foreground"
               role="alert"
             >
               This GitHub account is not approved to administer the portfolio.
