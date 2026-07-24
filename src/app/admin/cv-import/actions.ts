@@ -9,11 +9,19 @@ import { extractCvText } from "@/lib/cv/extract";
 import { parseCvDocument } from "@/lib/cv/parser";
 import { stageCvImport } from "@/lib/cv/stage";
 import { stageCvTechnologySuggestions } from "@/lib/cv/technologies";
+import {
+  reviewDataForResolution,
+  requiredCvFields,
+  suggestedBulkResolution,
+} from "@/lib/cv/review";
 import { db } from "@/lib/db";
+import { publishPortfolio } from "@/lib/publication";
+import { normalizeSkillKey } from "@/lib/skills/normalize";
 
 export type CvActionResult = {
   success: boolean;
   message: string;
+  blockedItemIds?: string[];
 };
 
 const reviewItemSchema = z.object({
@@ -30,6 +38,11 @@ const reviewItemSchema = z.object({
 
 const runSchema = z.object({ importRunId: z.string().cuid() });
 const uploadSchema = z.object({ cvUploadId: z.string().cuid() });
+const bulkReviewSchema = z.object({
+  importRunId: z.string().cuid(),
+  itemIds: z.array(z.string().cuid()).min(1).max(500),
+  action: z.enum(["ACCEPT", "IGNORE"]),
+});
 
 function dateValue(value: unknown) {
   return typeof value === "string" && value
@@ -140,6 +153,92 @@ export async function updateCvImportItem(
   return { success: true, message: "Review decision saved." };
 }
 
+export async function updateCvImportItemsBulk(
+  input: unknown,
+): Promise<CvActionResult> {
+  const { admin } = await requireAdminPage("/admin/cv-import");
+  const parsed = bulkReviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "Invalid bulk review decision." };
+  }
+  const uniqueIds = [...new Set(parsed.data.itemIds)];
+  const run = await db.cvImportRun.findFirst({
+    where: { id: parsed.data.importRunId, userId: admin.id },
+    select: {
+      status: true,
+      items: {
+        where: { id: { in: uniqueIds } },
+        select: {
+          id: true,
+          itemType: true,
+          existingRecordId: true,
+          existingData: true,
+          importedData: true,
+          editedData: true,
+        },
+      },
+    },
+  });
+  if (!run || run.items.length !== uniqueIds.length) {
+    return { success: false, message: "One or more review items were not found." };
+  }
+  if (run.status === "COMPLETED") {
+    return {
+      success: false,
+      message: "Create a new review draft before changing a completed import.",
+    };
+  }
+
+  const blocked =
+    parsed.data.action === "ACCEPT"
+      ? run.items.filter(
+          (item) => {
+            const resolution = suggestedBulkResolution(item);
+            return (
+              requiredCvFields(
+                item.itemType,
+                reviewDataForResolution(item, resolution),
+              ).length > 0
+            );
+          },
+        )
+      : [];
+  const allowedIds = run.items
+    .filter((item) => !blocked.some((blockedItem) => blockedItem.id === item.id))
+    .map((item) => item.id);
+
+  const updates = run.items
+    .filter((item) => allowedIds.includes(item.id))
+    .map((item) =>
+      db.cvImportItem.update({
+        where: { id: item.id },
+        data:
+          parsed.data.action === "IGNORE"
+            ? { resolution: "SKIP", status: "SKIPPED" }
+            : {
+                resolution: suggestedBulkResolution(item),
+                status: "ACCEPTED",
+                editedData: (item.editedData ??
+                  item.importedData) as Prisma.InputJsonValue,
+              },
+      }),
+    );
+  if (updates.length) await db.$transaction(updates);
+  revalidatePath("/admin/cv-import");
+
+  if (blocked.length) {
+    return {
+      success: true,
+      message: `${allowedIds.length} item${allowedIds.length === 1 ? "" : "s"} accepted. ${blocked.length} item${blocked.length === 1 ? " needs" : "s need"} required information before acceptance.`,
+      blockedItemIds: blocked.map((item) => item.id),
+    };
+  }
+  return {
+    success: true,
+    message: `${allowedIds.length} item${allowedIds.length === 1 ? "" : "s"} ${parsed.data.action === "ACCEPT" ? "accepted" : "ignored"}.`,
+  };
+}
+
 async function applyItem(
   transaction: Prisma.TransactionClient,
   userId: string,
@@ -176,6 +275,7 @@ async function applyItem(
   const replacing = item.resolution === "REPLACE";
   const merging = item.resolution === "MERGE";
   const existingId = item.existingRecordId;
+  let resolvedExistingId = existingId;
   let recordId = existingId;
 
   if (item.itemType === "PROFILE") {
@@ -335,18 +435,38 @@ async function applyItem(
         });
     recordId = result.id;
   } else if (item.itemType === "SKILL") {
-    const existing = existingId
-      ? await transaction.skill.findFirst({ where: { id: existingId, userId } })
-      : null;
+    const existing =
+      (existingId
+        ? await transaction.skill.findFirst({
+            where: { id: existingId, userId },
+          })
+        : null) ??
+      (
+        await transaction.skill.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            proficiency: true,
+          },
+        })
+      ).find(
+        (skill) =>
+          normalizeSkillKey(skill.name) ===
+          normalizeSkillKey(String(parsed.name)),
+      );
     if (existingId && !existing) throw new Error("Skill match is unavailable.");
+    resolvedExistingId = existing?.id ?? null;
+    const preserveExisting = merging || (!existingId && Boolean(existing));
     const data = {
-      name: merging && existing ? existing.name : String(parsed.name),
+      name: preserveExisting && existing ? existing.name : String(parsed.name),
       category:
-        merging && existing
+        preserveExisting && existing
           ? mergeText(existing.category, parsed.category)
           : text(parsed.category),
       proficiency:
-        merging && existing
+        preserveExisting && existing
           ? mergeText(existing.proficiency, parsed.proficiency)
           : text(parsed.proficiency),
       status: "PUBLISHED" as const,
@@ -501,7 +621,11 @@ async function applyItem(
 
   if (!recordId) throw new Error("Import item did not create or update a record.");
   return {
-    action: existingId ? (replacing ? "replaced" : "merged") : "created",
+    action: resolvedExistingId
+      ? replacing
+        ? "replaced"
+        : "merged"
+      : "created",
     recordId,
   };
 }
@@ -523,6 +647,22 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
     return {
       success: false,
       message: `${unresolved.length} item${unresolved.length === 1 ? " still needs" : "s still need"} an explicit import or skip decision.`,
+    };
+  }
+  const missingRequired = run.items.filter(
+    (item) =>
+      !["SKIP", "KEEP_EXISTING"].includes(item.resolution ?? "") &&
+      requiredCvFields(
+        item.itemType,
+        reviewDataForResolution(item, item.resolution),
+      ).length > 0,
+  );
+  if (missingRequired.length) {
+    return {
+      success: false,
+      message:
+        "Accepted changes contain missing required information. Review the highlighted sections before publishing.",
+      blockedItemIds: missingRequired.map((item) => item.id),
     };
   }
 
@@ -592,6 +732,46 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
       success: false,
       message:
         "The import could not be applied. No canonical changes were committed; the review draft is available for retry.",
+    };
+  }
+}
+
+export async function publishAcceptedCvImport(
+  input: unknown,
+): Promise<CvActionResult> {
+  const { admin } = await requireAdminPage("/admin/cv-import");
+  const parsed = runSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: "Invalid import run." };
+  const run = await db.cvImportRun.findFirst({
+    where: { id: parsed.data.importRunId, userId: admin.id },
+    select: { status: true },
+  });
+  if (!run) return { success: false, message: "Import run not found." };
+
+  if (run.status !== "COMPLETED") {
+    const applied = await applyCvImport(parsed.data);
+    if (!applied.success) return applied;
+  }
+
+  try {
+    const publication = await publishPortfolio(admin.id);
+    revalidatePath("/");
+    revalidatePath("/admin");
+    revalidatePath("/admin/cv-import");
+    revalidatePath("/admin/profile");
+    revalidatePath("/admin/experience");
+    revalidatePath("/admin/education");
+    revalidatePath("/admin/skills");
+    revalidatePath("/admin/projects");
+    return {
+      success: true,
+      message: `Accepted CV changes were published in portfolio revision ${publication.revision}.`,
+    };
+  } catch {
+    return {
+      success: false,
+      message:
+        "The accepted import is safe, but the public portfolio could not be published. Retry publishing without re-importing.",
     };
   }
 }

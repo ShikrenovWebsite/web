@@ -2,22 +2,29 @@
 
 import {
   AlertTriangle,
+  ArrowUpToLine,
   CheckCircle2,
+  Circle,
+  CircleDot,
   FileText,
   LoaderCircle,
+  Merge,
+  PlusCircle,
   RotateCcw,
+  SkipForward,
   Trash2,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
-  applyCvImport,
   deleteCvImportHistory,
+  publishAcceptedCvImport,
   reviewCvImportAgain,
   updateCvImportItem,
+  updateCvImportItemsBulk,
 } from "@/app/admin/cv-import/actions";
 import { updateSkillSuggestionsBulk } from "@/app/admin/skills/actions";
 import { Badge } from "@/components/ui/badge";
@@ -40,15 +47,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CV_REVIEW_SECTIONS,
+  type CvReviewResolution,
+  type CvReviewSection,
+  cvItemSection,
+  cvReviewChangeKind,
+  cvReviewSectionLabel,
+  requiredContactFields,
+  requiredCvFields,
+  reviewDataForResolution,
+} from "@/lib/cv/review";
 
 type ReviewItem = {
   id: string;
@@ -168,6 +179,73 @@ function UploadPanel() {
   );
 }
 
+function parseJson(value: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function itemRequiredFields(
+  item: ReviewItem,
+  editedJson = item.importedJson,
+  resolution = item.resolution as CvReviewResolution | null,
+) {
+  return requiredCvFields(
+    item.itemType,
+    reviewDataForResolution(
+      {
+        itemType: item.itemType,
+        existingRecordId: item.existingRecordId,
+        existingData: parseJson(item.existingJson),
+        editedData: parseJson(editedJson),
+      },
+      resolution,
+    ),
+  );
+}
+
+function ChangeBadge({ item }: { item: ReviewItem }) {
+  const missing = itemRequiredFields(item);
+  if (missing.length) {
+    return (
+      <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
+        <AlertTriangle aria-hidden="true" className="size-3" />
+        Missing information
+      </Badge>
+    );
+  }
+  const kind = cvReviewChangeKind({
+    existingRecordId: item.existingRecordId,
+    importedData: parseJson(item.importedJson),
+    existingData: parseJson(item.existingJson),
+  });
+  if (kind === "NEW") {
+    return (
+      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+        <PlusCircle aria-hidden="true" className="size-3" />
+        New
+      </Badge>
+    );
+  }
+  if (kind === "MODIFIED") {
+    return (
+      <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">
+        <CircleDot aria-hidden="true" className="size-3" />
+        Modified
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+      <Circle aria-hidden="true" className="size-3" />
+      Unchanged
+    </Badge>
+  );
+}
+
 function ReviewItemCard({
   item,
   readOnly = false,
@@ -178,14 +256,18 @@ function ReviewItemCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editedJson, setEditedJson] = useState(item.importedJson);
-  const [resolution, setResolution] = useState(item.resolution ?? "");
+  const [resolution, setResolution] = useState<CvReviewResolution | null>(
+    (item.resolution as CvReviewResolution | null) ?? null,
+  );
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const missing = itemRequiredFields(item, editedJson, resolution);
 
-  function save() {
+  function saveDecision(nextResolution: CvReviewResolution) {
+    setResolution(nextResolution);
     startTransition(async () => {
       const result = await updateCvImportItem({
         itemId: item.id,
-        resolution,
+        resolution: nextResolution,
         editedJson,
       });
       if (result.success) {
@@ -198,7 +280,7 @@ function ReviewItemCard({
   }
 
   return (
-    <Card>
+    <Card className={missing.length ? "border-red-300" : undefined}>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -207,24 +289,39 @@ function ReviewItemCard({
             </CardTitle>
             <CardDescription>
               {item.existingRecordId
-                ? `Possible existing match${
+                ? `Matched to an existing item${
                     item.duplicateScore
                       ? ` · ${Math.round(item.duplicateScore * 100)}% confidence`
                       : ""
                   }`
-                : "No existing match suggested"}
+                : "Proposed as a new portfolio item"}
             </CardDescription>
           </div>
-          <Badge>{item.status.toLowerCase()}</Badge>
-          {item.classificationConfidence !== null &&
-          item.classificationConfidence < 0.75 ? (
-            <Badge className="bg-amber-100 text-amber-900">
-              Low confidence
-            </Badge>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <ChangeBadge item={item} />
+            {resolution ? (
+              <Badge className="bg-background text-foreground">
+                {resolution.replaceAll("_", " ").toLowerCase()}
+              </Badge>
+            ) : null}
+            {item.classificationConfidence !== null &&
+            item.classificationConfidence < 0.75 ? (
+              <Badge className="bg-amber-100 text-amber-900">
+                Low confidence
+              </Badge>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {missing.length ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            <p className="font-medium">
+              This item contains missing required information.
+            </p>
+            <p className="mt-1">Missing: {missing.join(", ")}.</p>
+          </div>
+        ) : null}
         {item.sourceSection ? (
           <div className="rounded-md border bg-muted/20 p-3 text-xs">
             <p className="font-medium">
@@ -232,7 +329,7 @@ function ReviewItemCard({
               paragraphs {item.sourceStartParagraph ?? "?"}–
               {item.sourceEndParagraph ?? "?"}
               {item.classificationConfidence !== null
-                ? ` · ${Math.round(item.classificationConfidence * 100)}% classification confidence`
+                ? ` · ${Math.round(item.classificationConfidence * 100)}% confidence`
                 : ""}
             </p>
             {item.classificationWarnings.map((warning) => (
@@ -252,79 +349,86 @@ function ReviewItemCard({
             ) : null}
           </div>
         ) : null}
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr]">
           <div>
             <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              Current portfolio
+              Current value
             </p>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-xs">
               {item.existingJson ?? "No existing record"}
             </pre>
           </div>
+          <div className="hidden items-center text-muted-foreground lg:flex">
+            <Merge aria-hidden="true" className="size-5" />
+          </div>
           <div>
             <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              CV proposal — editable before import
+              Imported value — editable
             </p>
             <Textarea
               className="min-h-64 font-mono text-xs"
+              disabled={readOnly}
               onChange={(event) => setEditedJson(event.target.value)}
               value={editedJson}
             />
           </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="grid flex-1 gap-1.5 text-sm">
-            Decision
-            <Select onValueChange={setResolution} value={resolution}>
-              <SelectTrigger disabled={readOnly}>
-                <SelectValue placeholder="Choose an explicit decision" />
-              </SelectTrigger>
-              <SelectContent>
-                {!item.existingRecordId ? (
-                  <SelectItem value="CREATE_NEW">Import as new draft</SelectItem>
-                ) : null}
-                {item.existingRecordId ? (
-                  <>
-                    <SelectItem value="KEEP_EXISTING">
-                      Keep current portfolio record
-                    </SelectItem>
-                    <SelectItem value="MERGE">
-                      Merge missing fields and lists
-                    </SelectItem>
-                    <SelectItem value="REPLACE">
-                      Replace fields explicitly
-                    </SelectItem>
-                  </>
-                ) : null}
-                <SelectItem value="SKIP">Skip</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <Button
-            disabled={pending || readOnly || !resolution}
-            onClick={() =>
-              resolution === "REPLACE" ? setConfirmReplace(true) : save()
-            }
-          >
-            {pending ? (
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-4 animate-spin"
-              />
-            ) : (
+        <div className="flex flex-wrap gap-2">
+          {item.existingRecordId ? (
+            <>
+              <Button
+                disabled={pending || readOnly}
+                onClick={() => saveDecision("KEEP_EXISTING")}
+                variant={resolution === "KEEP_EXISTING" ? "default" : "outline"}
+              >
+                Keep current
+              </Button>
+              <Button
+                disabled={pending || readOnly || missing.length > 0}
+                onClick={() => setConfirmReplace(true)}
+                variant={resolution === "REPLACE" ? "default" : "outline"}
+              >
+                Use imported
+              </Button>
+              <Button
+                disabled={pending || readOnly || missing.length > 0}
+                onClick={() => saveDecision("MERGE")}
+                variant={resolution === "MERGE" ? "default" : "outline"}
+              >
+                Merge
+              </Button>
+            </>
+          ) : (
+            <Button
+              disabled={pending || readOnly || missing.length > 0}
+              onClick={() => saveDecision("CREATE_NEW")}
+            >
               <CheckCircle2 aria-hidden="true" className="size-4" />
-            )}
-            Save decision
+              Accept item
+            </Button>
+          )}
+          <Button
+            disabled={pending || readOnly}
+            onClick={() => saveDecision("SKIP")}
+            variant={resolution === "SKIP" ? "default" : "outline"}
+          >
+            <SkipForward aria-hidden="true" className="size-4" />
+            Ignore
           </Button>
+          {pending ? (
+            <LoaderCircle
+              aria-label="Saving decision"
+              className="size-4 animate-spin self-center"
+            />
+          ) : null}
         </div>
         <AlertDialog onOpenChange={setConfirmReplace} open={confirmReplace}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Replace portfolio fields?</AlertDialogTitle>
+              <AlertDialogTitle>Use the imported values?</AlertDialogTitle>
               <AlertDialogDescription>
-                This explicitly authorizes the CV proposal to replace editable
-                fields on the matched record. GitHub project relationships and
-                publication state remain preserved.
+                This explicitly replaces editable fields on the matched record.
+                GitHub relationships and publication state remain preserved.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -332,16 +436,71 @@ function ReviewItemCard({
               <AlertDialogAction
                 onClick={() => {
                   setConfirmReplace(false);
-                  save();
+                  saveDecision("REPLACE");
                 }}
               >
-                Confirm replacement
+                Confirm imported values
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </CardContent>
     </Card>
+  );
+}
+
+function ContactReview({ item }: { item: ReviewItem | undefined }) {
+  if (!item) {
+    return (
+      <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+        No contact changes were detected.
+      </p>
+    );
+  }
+  const current = (parseJson(item.existingJson) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const imported = (parseJson(item.importedJson) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const fields = ["email", "phone", "location", "website", "github", "linkedin"];
+  const missing = requiredContactFields(imported);
+  return (
+    <div
+      className={`grid gap-3 rounded-md border p-4 md:grid-cols-2 ${
+        missing.length ? "border-red-300 bg-red-50/40" : ""
+      }`}
+    >
+      <div>
+        <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+          Current contact
+        </p>
+        {fields.map((field) => (
+          <p className="text-sm" key={field}>
+            <span className="capitalize text-muted-foreground">{field}:</span>{" "}
+            {String(current[field] || "Not set")}
+          </p>
+        ))}
+      </div>
+      <div>
+        <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+          Imported contact
+        </p>
+        {fields.map((field) => (
+          <p className="text-sm" key={field}>
+            <span className="capitalize text-muted-foreground">{field}:</span>{" "}
+            {String(imported[field] || "Not detected")}
+          </p>
+        ))}
+        {missing.length ? (
+          <p className="mt-2 text-sm font-medium text-red-800">
+            Missing required information: {missing.join(", ")}.
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -358,6 +517,63 @@ function ReviewPanel({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const readOnly = importRunStatus === "COMPLETED";
+  const pendingTechnologies = technologySuggestions.filter(
+    (suggestion) => suggestion.status === "PENDING",
+  );
+
+  const sectionState = useMemo(
+    () =>
+      CV_REVIEW_SECTIONS.map((section) => {
+        const sectionItems =
+          section === "CONTACT"
+            ? items.filter((item) => item.itemType === "PROFILE")
+            : items.filter((item) => cvItemSection(item.itemType) === section);
+        const unresolved = sectionItems.filter((item) => !item.resolution);
+        const missing = sectionItems.filter(
+          (item) =>
+            !["SKIP", "KEEP_EXISTING"].includes(item.resolution ?? "") &&
+            itemRequiredFields(item).length > 0,
+        );
+        const technologyPending =
+          section === "SKILLS" ? pendingTechnologies.length : 0;
+        const counts = sectionItems.reduce(
+          (total, item) => {
+            const kind = cvReviewChangeKind({
+              existingRecordId: item.existingRecordId,
+              importedData: parseJson(item.importedJson),
+              existingData: parseJson(item.existingJson),
+            });
+            total[kind] += 1;
+            return total;
+          },
+          { NEW: 0, MODIFIED: 0, UNCHANGED: 0 },
+        );
+        return {
+          section,
+          items: sectionItems,
+          counts,
+          missing,
+          complete:
+            unresolved.length === 0 &&
+            missing.length === 0 &&
+            technologyPending === 0,
+        };
+      }),
+    [items, pendingTechnologies.length],
+  );
+  const progress = Math.round(
+    (sectionState.filter((section) => section.complete).length /
+      CV_REVIEW_SECTIONS.length) *
+      100,
+  );
+  const allResolved =
+    items.every((item) => Boolean(item.resolution)) &&
+    pendingTechnologies.length === 0;
+  const missingSections = sectionState.filter(
+    (section) => section.missing.length > 0,
+  );
 
   if (!importRunId) {
     return (
@@ -367,11 +583,62 @@ function ReviewPanel({
     );
   }
 
-  function apply() {
+  function bulk(
+    section: CvReviewSection | "ALL",
+    action: "ACCEPT" | "IGNORE",
+  ) {
+    const selectedItems =
+      section === "ALL"
+        ? items
+        : section === "CONTACT"
+          ? items.filter((item) => item.itemType === "PROFILE")
+          : items.filter((item) => cvItemSection(item.itemType) === section);
+    const selectedTechnologyIds =
+      section === "ALL" || section === "SKILLS"
+        ? pendingTechnologies.map((suggestion) => suggestion.id)
+        : [];
+    if (!selectedItems.length && !selectedTechnologyIds.length) return;
+
     startTransition(async () => {
-      const result = await applyCvImport({ importRunId });
+      if (selectedTechnologyIds.length) {
+        const technologyResult = await updateSkillSuggestionsBulk({
+          suggestionIds: selectedTechnologyIds,
+          action,
+        });
+        if (!technologyResult.success) {
+          toast.error(technologyResult.message);
+          return;
+        }
+      }
+      if (selectedItems.length) {
+        const result = await updateCvImportItemsBulk({
+          importRunId,
+          itemIds: selectedItems.map((item) => item.id),
+          action,
+        });
+        if (!result.success) {
+          toast.error(result.message);
+          return;
+        }
+        if (result.blockedItemIds?.length) toast.warning(result.message);
+        else toast.success(result.message);
+      } else {
+        toast.success(
+          action === "ACCEPT"
+            ? "Detected technologies accepted."
+            : "Detected technologies ignored.",
+        );
+      }
+      router.refresh();
+    });
+  }
+
+  function publish() {
+    startTransition(async () => {
+      const result = await publishAcceptedCvImport({ importRunId });
       if (result.success) {
         toast.success(result.message);
+        setPublishOpen(false);
         router.refresh();
       } else {
         toast.error(result.message);
@@ -379,38 +646,267 @@ function ReviewPanel({
     });
   }
 
+  const summary = sectionState.map((state) => {
+    const accepted = state.items.filter(
+      (item) =>
+        item.resolution &&
+        !["SKIP", "KEEP_EXISTING"].includes(item.resolution),
+    );
+    const added = accepted.filter((item) => !item.existingRecordId).length;
+    const changed = accepted.length - added;
+    const acceptedTechnologies =
+      state.section === "SKILLS"
+        ? technologySuggestions.filter(
+            (suggestion) => suggestion.status === "ACCEPTED",
+          ).length
+        : 0;
+    return { ...state, added: added + acceptedTechnologies, changed };
+  });
+
   return (
-    <div className="space-y-4">
-      <TechnologyReview suggestions={technologySuggestions} />
-      <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-medium">Structured proposal review</p>
-          <p className="text-sm text-muted-foreground">
-            Unsaved and skipped items make no canonical changes. Apply runs in
-            one database transaction.
-          </p>
-        </div>
-        <Button
-          disabled={pending || importRunStatus === "COMPLETED"}
-          onClick={apply}
+    <div className="space-y-6">
+      <Card className="sticky top-3 z-20 shadow-sm">
+        <CardHeader>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle>Review progress · {progress}% complete</CardTitle>
+              <CardDescription className="mt-1">
+                Safe, unique suggestions can be accepted together. Only
+                uncertain or conflicting items need individual review.
+              </CardDescription>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {sectionState.map((state) => (
+                  <a
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      state.complete
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : state.missing.length
+                          ? "border-red-200 bg-red-50 text-red-800"
+                          : "border-amber-200 bg-amber-50 text-amber-900"
+                    }`}
+                    href={`#review-${state.section.toLowerCase()}`}
+                    key={state.section}
+                  >
+                    {state.complete ? (
+                      <CheckCircle2 aria-hidden="true" className="size-3" />
+                    ) : (
+                      <AlertTriangle aria-hidden="true" className="size-3" />
+                    )}
+                    {cvReviewSectionLabel(state.section)}
+                  </a>
+                ))}
+              </div>
+              <div
+                aria-label={`${progress}% of review sections complete`}
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={progress}
+                className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+              >
+                <div
+                  className="h-full rounded-full bg-emerald-600 transition-[width]"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={pending || readOnly}
+                onClick={() => bulk("ALL", "ACCEPT")}
+              >
+                Accept all changes
+              </Button>
+              <Button
+                disabled={pending || readOnly}
+                onClick={() => bulk("ALL", "IGNORE")}
+                variant="outline"
+              >
+                Ignore all changes
+              </Button>
+              <Button
+                disabled={pending || !allResolved || missingSections.length > 0}
+                onClick={() => setPublishOpen(true)}
+              >
+                <ArrowUpToLine aria-hidden="true" className="size-4" />
+                Publish accepted changes
+              </Button>
+            </div>
+          </div>
+          {!allResolved ? (
+            <p className="text-sm text-amber-800">
+              Review or ignore the remaining items before publishing.
+            </p>
+          ) : null}
+          {missingSections.length ? (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              <p className="font-medium">
+                This review contains missing required information.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {missingSections.map((state) => (
+                  <Button asChild key={state.section} size="sm" variant="outline">
+                    <a href={`#review-${state.section.toLowerCase()}`}>
+                      Review {cvReviewSectionLabel(state.section)}
+                    </a>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </CardHeader>
+      </Card>
+
+      {sectionState.map((state) => (
+        <section
+          className="scroll-mt-32 space-y-3"
+          id={`review-${state.section.toLowerCase()}`}
+          key={state.section}
         >
-          {pending ? (
-            <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold">
+                {cvReviewSectionLabel(state.section)}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                <span className="text-emerald-700">
+                  {state.counts.NEW} new
+                </span>{" "}
+                ·{" "}
+                <span className="text-amber-700">
+                  {state.counts.MODIFIED} changed
+                </span>{" "}
+                · {state.counts.UNCHANGED} existing
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={
+                  pending ||
+                  readOnly ||
+                  (!state.items.length &&
+                    !(
+                      state.section === "SKILLS" &&
+                      pendingTechnologies.length
+                    ))
+                }
+                onClick={() => bulk(state.section, "ACCEPT")}
+                size="sm"
+              >
+                Accept all
+              </Button>
+              <Button
+                disabled={
+                  pending ||
+                  readOnly ||
+                  (!state.items.length &&
+                    !(
+                      state.section === "SKILLS" &&
+                      pendingTechnologies.length
+                    ))
+                }
+                onClick={() => bulk(state.section, "IGNORE")}
+                size="sm"
+                variant="outline"
+              >
+                Ignore all
+              </Button>
+            </div>
+          </div>
+          {state.missing.length ? (
+            <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              This section contains missing required information.
+            </p>
+          ) : null}
+          {state.section === "CONTACT" ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Contact fields belong to the profile proposal, so Profile and
+                Contact share one safe import decision.
+              </p>
+              <ContactReview
+                item={items.find((item) => item.itemType === "PROFILE")}
+              />
+            </>
           ) : (
-            <CheckCircle2 aria-hidden="true" className="size-4" />
+            state.items.map((item) => (
+              <ReviewItemCard item={item} key={item.id} readOnly={readOnly} />
+            ))
           )}
-          {importRunStatus === "COMPLETED"
-            ? "Import already applied"
-            : "Apply approved items"}
-        </Button>
-      </div>
-      {items.map((item) => (
-        <ReviewItemCard
-          item={item}
-          key={item.id}
-          readOnly={importRunStatus === "COMPLETED"}
-        />
+          {state.section === "SKILLS" ? (
+            <TechnologyReview suggestions={technologySuggestions} />
+          ) : null}
+          {!state.items.length &&
+          state.section !== "CONTACT" &&
+          !(
+            state.section === "SKILLS" && technologySuggestions.length
+          ) ? (
+            <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              No changes were detected in this section.
+            </p>
+          ) : null}
+        </section>
       ))}
+
+      <AlertDialog onOpenChange={setPublishOpen} open={publishOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish accepted changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This applies the selected import transactionally, then creates a
+              new public portfolio revision.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 rounded-md border p-3">
+            {summary.some(
+              (section) =>
+                section.section !== "CONTACT" &&
+                (section.added > 0 || section.changed > 0),
+            ) ? (
+              summary
+              .filter(
+                (section) =>
+                  section.section !== "CONTACT" &&
+                  (section.added > 0 || section.changed > 0),
+              )
+              .map((section) => (
+                <div
+                  className="flex items-center justify-between gap-3 text-sm"
+                  key={section.section}
+                >
+                  <span className="font-medium">
+                    {cvReviewSectionLabel(section.section)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {section.added ? `+${section.added} added` : ""}
+                    {section.added && section.changed ? " · " : ""}
+                    {section.changed ? `${section.changed} merged/updated` : ""}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No canonical changes are selected. Publishing will only refresh
+                the current public snapshot.
+              </p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue reviewing</AlertDialogCancel>
+            <AlertDialogAction disabled={pending} onClick={publish}>
+              {pending ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-4 animate-spin"
+                />
+              ) : (
+                <ArrowUpToLine aria-hidden="true" className="size-4" />
+              )}
+              Publish changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

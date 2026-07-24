@@ -55,7 +55,13 @@ export async function stageCvImport(input: {
       | "CERTIFICATION"
       | "LANGUAGE"
       | "PROJECT";
-    status: "PENDING" | "CONFLICT";
+    status: "PENDING" | "CONFLICT" | "ACCEPTED" | "SKIPPED";
+    resolution?:
+      | "CREATE_NEW"
+      | "KEEP_EXISTING"
+      | "REPLACE"
+      | "MERGE"
+      | "SKIP";
     importedData: Prisma.InputJsonValue;
     existingRecordId?: string;
     existingData?: Prisma.InputJsonValue;
@@ -194,11 +200,21 @@ export async function stageCvImport(input: {
 
   for (const [itemIndex, proposed] of input.draft.skills.entries()) {
     const match = skills.find((record) => skillMatches(proposed.name, record.name));
+    const metadata = provenance("SKILL", itemIndex);
+    const safeUniqueSkill =
+      !match &&
+      (metadata.classificationConfidence ?? 1) >= 0.85 &&
+      !(metadata.classificationWarnings?.length ?? 0);
     items.push({
       itemType: "SKILL",
-      status: match ? "CONFLICT" : "PENDING",
+      status: match ? "SKIPPED" : safeUniqueSkill ? "ACCEPTED" : "PENDING",
+      resolution: match
+        ? "KEEP_EXISTING"
+        : safeUniqueSkill
+          ? "CREATE_NEW"
+          : undefined,
       importedData: json(proposed),
-      ...provenance("SKILL", itemIndex),
+      ...metadata,
       ...(match
         ? {
             existingRecordId: match.id,
