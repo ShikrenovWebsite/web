@@ -4,6 +4,7 @@ import {
   MobileAdminNav,
 } from "@/components/admin/admin-nav";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { PublishButton } from "@/components/admin/publish-button";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, ShieldCheck } from "@/components/ui/icons";
 import { requireAdminPage } from "@/lib/auth";
@@ -30,6 +31,7 @@ export default async function AdminLayout({
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {admin.githubLogin ? `@${admin.githubLogin}` : admin.name}
             </span>
+            <PublishButton />
             <Button asChild size="icon" variant="ghost">
               <Link aria-label="View public portfolio" href="/" target="_blank">
                 <ExternalLink aria-hidden="true" className="size-4" />

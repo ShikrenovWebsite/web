@@ -41,6 +41,8 @@ export async function refreshSkillSuggestions(userId: string) {
           skillId: true,
           category: true,
           displayName: true,
+          sourceTypes: true,
+          evidence: true,
         },
       }),
     ]);
@@ -98,6 +100,25 @@ export async function refreshSkillSuggestions(userId: string) {
         existingSkillId: existing?.skillId,
         canonicalSkillId: canonicalSkill?.id,
       });
+      const preservedEvidence = Array.isArray(existing?.evidence)
+        ? existing.evidence.filter(
+            (item) =>
+              typeof item === "object" &&
+              item &&
+              "sourceType" in item &&
+              item.sourceType === "CV_IMPORT",
+          )
+        : [];
+      const combinedEvidence = [
+        ...preservedEvidence,
+        ...suggestion.evidence,
+      ];
+      const combinedSourceTypes = [
+        ...new Set([
+          ...(existing?.sourceTypes.filter((type) => type === "CV_IMPORT") ?? []),
+          ...suggestion.sourceTypes,
+        ]),
+      ];
       return db.skillSuggestion.upsert({
         where: {
           userId_normalizedKey: {
@@ -110,9 +131,9 @@ export async function refreshSkillSuggestions(userId: string) {
           normalizedKey: suggestion.normalizedKey,
           displayName: suggestion.displayName,
           category: suggestion.category,
-          sourceTypes: suggestion.sourceTypes,
-          evidence: suggestion.evidence as unknown as Prisma.InputJsonValue,
-          sourceCount: suggestion.sourceCount,
+          sourceTypes: combinedSourceTypes,
+          evidence: combinedEvidence as unknown as Prisma.InputJsonValue,
+          sourceCount: combinedEvidence.length,
           confidence: suggestion.confidence,
           status: resolution.status,
           skillId: resolution.skillId,
@@ -120,9 +141,9 @@ export async function refreshSkillSuggestions(userId: string) {
         update: {
           displayName: existing?.displayName ?? suggestion.displayName,
           category: existing?.category ?? suggestion.category,
-          sourceTypes: suggestion.sourceTypes,
-          evidence: suggestion.evidence as unknown as Prisma.InputJsonValue,
-          sourceCount: suggestion.sourceCount,
+          sourceTypes: combinedSourceTypes,
+          evidence: combinedEvidence as unknown as Prisma.InputJsonValue,
+          sourceCount: combinedEvidence.length,
           confidence: suggestion.confidence,
           status: resolution.status,
           skillId: resolution.skillId,

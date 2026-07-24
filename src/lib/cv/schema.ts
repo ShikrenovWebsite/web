@@ -109,6 +109,18 @@ export const cvStructuredDraftSchema = z.object({
   volunteering: z.array(z.string().trim().min(1).max(2000)).default([]),
   publications: z.array(z.string().trim().min(1).max(2000)).default([]),
   interests: z.array(z.string().trim().min(1).max(500)).default([]),
+  unclassified: z
+    .array(
+      z.object({
+        text: z.string().trim().min(1).max(20_000),
+        sourcePage: z.number().int().positive(),
+        sourceSection: z.string().trim().max(120),
+        startParagraph: z.number().int().nonnegative(),
+        endParagraph: z.number().int().nonnegative(),
+        reason: z.string().trim().max(500),
+      }),
+    )
+    .default([]),
 });
 
 export type CvStructuredDraft = z.infer<typeof cvStructuredDraftSchema>;

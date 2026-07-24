@@ -1,7 +1,11 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
-import { CV_PARSER_VERSION } from "@/lib/cv/parser";
+import {
+  CV_PARSER_VERSION,
+  type CvParsedItemMetadata,
+  type CvParseDiagnostics,
+} from "@/lib/cv/parser";
 import {
   educationMatchScore,
   experienceMatchScore,
@@ -23,6 +27,8 @@ export async function stageCvImport(input: {
   userId: string;
   cvUploadId: string;
   draft: CvStructuredDraft;
+  itemMetadata?: CvParsedItemMetadata[];
+  diagnostics?: CvParseDiagnostics;
 }) {
   const [profile, experiences, education, skills, projects, certifications, languages] =
     await Promise.all([
@@ -54,15 +60,42 @@ export async function stageCvImport(input: {
     existingRecordId?: string;
     existingData?: Prisma.InputJsonValue;
     duplicateScore?: number;
+    classificationConfidence?: number;
+    sourcePage?: number;
+    sourceSection?: string;
+    sourceStartParagraph?: number;
+    sourceEndParagraph?: number;
+    sourceText?: string;
+    classificationWarnings?: string[];
     displayOrder: number;
   }> = [];
   let displayOrder = 0;
+  function provenance(
+    itemType: CvParsedItemMetadata["itemType"],
+    itemIndex: number,
+  ) {
+    const metadata = input.itemMetadata?.find(
+      (item) => item.itemType === itemType && item.itemIndex === itemIndex,
+    );
+    return metadata
+      ? {
+          classificationConfidence: metadata.confidence,
+          sourcePage: metadata.sourcePage,
+          sourceSection: metadata.sourceSection,
+          sourceStartParagraph: metadata.startParagraph,
+          sourceEndParagraph: metadata.endParagraph,
+          sourceText: metadata.sourceText,
+          classificationWarnings: metadata.warnings,
+        }
+      : {};
+  }
 
   if (Object.values(input.draft.profile).some(Boolean)) {
     items.push({
       itemType: "PROFILE",
       status: profile ? "CONFLICT" : "PENDING",
       importedData: json(input.draft.profile),
+      ...provenance("PROFILE", 0),
       ...(profile
         ? {
             existingRecordId: profile.id,
@@ -83,7 +116,7 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.experience) {
+  for (const [itemIndex, proposed] of input.draft.experience.entries()) {
     const matches = experiences
       .map((record) => ({
         record,
@@ -99,6 +132,7 @@ export async function stageCvImport(input: {
       itemType: "EXPERIENCE",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("EXPERIENCE", itemIndex),
       ...(match
         ? {
             existingRecordId: match.record.id,
@@ -121,7 +155,7 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.education) {
+  for (const [itemIndex, proposed] of input.draft.education.entries()) {
     const matches = education
       .map((record) => ({
         record,
@@ -137,6 +171,7 @@ export async function stageCvImport(input: {
       itemType: "EDUCATION",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("EDUCATION", itemIndex),
       ...(match
         ? {
             existingRecordId: match.record.id,
@@ -157,12 +192,13 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.skills) {
+  for (const [itemIndex, proposed] of input.draft.skills.entries()) {
     const match = skills.find((record) => skillMatches(proposed.name, record.name));
     items.push({
       itemType: "SKILL",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("SKILL", itemIndex),
       ...(match
         ? {
             existingRecordId: match.id,
@@ -178,7 +214,7 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.projects) {
+  for (const [itemIndex, proposed] of input.draft.projects.entries()) {
     const matches = projects
       .map((record) => ({
         record,
@@ -193,6 +229,7 @@ export async function stageCvImport(input: {
       itemType: "PROJECT",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("PROJECT", itemIndex),
       ...(match
         ? {
             existingRecordId: match.record.id,
@@ -213,7 +250,7 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.certifications) {
+  for (const [itemIndex, proposed] of input.draft.certifications.entries()) {
     const match = certifications.find(
       (record) => record.name.toLowerCase() === proposed.name.toLowerCase(),
     );
@@ -221,6 +258,7 @@ export async function stageCvImport(input: {
       itemType: "CERTIFICATION",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("CERTIFICATION", itemIndex),
       ...(match
         ? {
             existingRecordId: match.id,
@@ -239,7 +277,7 @@ export async function stageCvImport(input: {
     });
   }
 
-  for (const proposed of input.draft.languages) {
+  for (const [itemIndex, proposed] of input.draft.languages.entries()) {
     const match = languages.find(
       (record) => record.name.toLowerCase() === proposed.name.toLowerCase(),
     );
@@ -247,6 +285,7 @@ export async function stageCvImport(input: {
       itemType: "LANGUAGE",
       status: match ? "CONFLICT" : "PENDING",
       importedData: json(proposed),
+      ...provenance("LANGUAGE", itemIndex),
       ...(match
         ? {
             existingRecordId: match.id,
@@ -268,7 +307,11 @@ export async function stageCvImport(input: {
       status: "READY_FOR_REVIEW",
       parserVersion: CV_PARSER_VERSION,
       structuredData: json(input.draft),
-      validationResult: json({ success: true, parserVersion: CV_PARSER_VERSION }),
+      validationResult: json({
+        success: true,
+        parserVersion: CV_PARSER_VERSION,
+        diagnostics: input.diagnostics ?? null,
+      }),
       completedAt: new Date(),
       items: { create: items },
     },

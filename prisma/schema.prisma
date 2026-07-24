@@ -151,6 +151,7 @@ model User {
   skillSuggestions  SkillSuggestion[]
   mediaAssets       MediaAsset[]
   siteSettings      SiteSettings?
+  publication       PortfolioPublication?
 }
 
 model Account {
@@ -529,6 +530,7 @@ model CvUpload {
   checksum           String
   status             CvUploadStatus @default(UPLOADED)
   extractedText      String?        @db.Text
+  extractionMetadata Json?
   extractionError    String?        @db.Text
   extractionWarnings String[]       @default([])
   pageCount          Int?
@@ -570,21 +572,29 @@ model CvImportRun {
 }
 
 model CvImportItem {
-  id               String            @id @default(cuid())
-  importRunId      String
-  itemType         ImportItemType
-  status           ImportItemStatus  @default(PENDING)
-  resolution       ImportResolution?
-  importedData     Json
-  editedData       Json?
-  existingRecordId String?
-  existingData     Json?
-  duplicateScore   Float?
-  createdRecordId  String?
-  appliedAt        DateTime?
-  displayOrder     Int               @default(0)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                       String            @id @default(cuid())
+  importRunId              String
+  itemType                 ImportItemType
+  status                   ImportItemStatus  @default(PENDING)
+  resolution               ImportResolution?
+  importedData             Json
+  editedData               Json?
+  existingRecordId         String?
+  existingData             Json?
+  duplicateScore           Float?
+  classificationConfidence Float?
+  sourcePage               Int?
+  sourceSection            String?
+  sourceStartParagraph     Int?
+  sourceEndParagraph       Int?
+  sourceText               String?           @db.Text
+  classificationWarnings   String[]          @default([])
+  createdRecordId          String?
+  appliedAt                DateTime?
+  publishedAt              DateTime?
+  displayOrder             Int               @default(0)
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 
   importRun CvImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
 
@@ -631,6 +641,8 @@ model SkillSuggestion {
   skillId         String?
   firstDetectedAt DateTime              @default(now())
   lastDetectedAt  DateTime              @default(now())
+  acceptedAt      DateTime?
+  publishedAt     DateTime?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -705,6 +717,18 @@ model SiteSettings {
   seoMetadata          Json?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PortfolioPublication {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  revision    Int      @default(1)
+  data        Json
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

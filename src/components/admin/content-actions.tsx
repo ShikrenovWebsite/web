@@ -100,13 +100,13 @@ export function ContentActions({
       ) : null}
       {status !== "PUBLISHED" ? (
         <Button
-          aria-label={`Publish ${label}`}
+          aria-label={`Approve ${label} for publication`}
           disabled={isPending}
           onClick={() =>
             run(() => changeContentStatus({ type, id, status: "PUBLISHED" }))
           }
           size="icon"
-          title="Publish"
+          title="Include in next publication"
           type="button"
           variant="ghost"
         >
@@ -114,13 +114,13 @@ export function ContentActions({
         </Button>
       ) : (
         <Button
-          aria-label={`Hide ${label}`}
+          aria-label={`Hide ${label} in next publication`}
           disabled={isPending}
           onClick={() =>
             run(() => changeContentStatus({ type, id, status: "HIDDEN" }))
           }
           size="icon"
-          title="Hide"
+          title="Hide in next publication"
           type="button"
           variant="ghost"
         >

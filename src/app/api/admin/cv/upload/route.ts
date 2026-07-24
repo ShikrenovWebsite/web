@@ -1,14 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import { requireAdminApi } from "@/lib/auth";
-import { extractCvText, CvExtractionError } from "@/lib/cv/extract";
-import { parseCvText } from "@/lib/cv/parser";
+import {
+  extractCvText,
+  CvExtractionError,
+  extractionErrorDiagnostic,
+} from "@/lib/cv/extract";
+import { parseCvDocument } from "@/lib/cv/parser";
 import { stageCvImport } from "@/lib/cv/stage";
+import { stageCvTechnologySuggestions } from "@/lib/cv/technologies";
 import {
   validateCvFile,
   CvUploadValidationError,
 } from "@/lib/cv/upload";
 import { db } from "@/lib/db";
 import { getServerEnv } from "@/lib/env";
+
+export const runtime = "nodejs";
 
 function safeError(error: unknown) {
   if (error instanceof CvUploadValidationError) return error.message;
@@ -50,7 +57,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "Choose a CV file." }, { status: 400 });
   }
 
-  const data = Buffer.from(await file.arrayBuffer());
+  const arrayBuffer = await file.arrayBuffer();
+  const data = Buffer.from(arrayBuffer);
+  const pdfSignature = data.subarray(0, 5).toString("ascii") === "%PDF-";
+  if (process.env.NODE_ENV === "development") {
+    console.info("[cv-upload] received", {
+      filename: file.name,
+      mimeType: file.type,
+      fileSize: file.size,
+      bufferLength: data.length,
+      pdfSignature,
+      runtime: process.release.name,
+      nextRuntime: process.env.NEXT_RUNTIME ?? "nodejs",
+    });
+  }
   let validated: Awaited<ReturnType<typeof validateCvFile>>;
   try {
     validated = await validateCvFile({
@@ -93,23 +113,79 @@ export async function POST(request: Request) {
   });
 
   try {
-    const extraction = await extractCvText(data, validated.mimeType);
+    const stored = await db.cvUpload.findFirst({
+      where: { id: upload.id, userId },
+      include: {
+        mediaAsset: {
+          select: { fileData: true, checksum: true, sizeBytes: true },
+        },
+      },
+    });
+    const storedData = Buffer.from(stored?.mediaAsset.fileData ?? []);
+    const storedChecksum = createHash("sha256").update(storedData).digest("hex");
+    const storageVerified =
+      storedData.length === data.length &&
+      stored?.mediaAsset.sizeBytes === data.length &&
+      storedChecksum === checksum &&
+      stored?.mediaAsset.checksum === checksum &&
+      storedData.equals(data);
+    if (process.env.NODE_ENV === "development") {
+      console.info("[cv-upload] private storage verification", {
+        uploadId: upload.id,
+        originalBufferLength: data.length,
+        storedBufferLength: storedData.length,
+        checksumMatches: storedChecksum === checksum,
+        byteIdentical: storedData.equals(data),
+      });
+    }
+    if (!storageVerified) {
+      throw new CvExtractionError(
+        "The private upload could not be verified after storage. Upload the file again.",
+        "EXTRACTOR_FAILURE",
+        { cause: new Error("Stored CV bytes did not match the uploaded bytes.") },
+      );
+    }
+    const extraction = await extractCvText(storedData, validated.mimeType);
+    const parsedDocument = parseCvDocument({
+      pages: extraction.pages,
+      truncated: extraction.truncated,
+      extractionWarnings: extraction.warnings,
+    });
+    if (process.env.NODE_ENV === "development") {
+      console.info("[cv-upload] parse diagnostics", parsedDocument.diagnostics);
+    }
     await db.cvUpload.update({
       where: { id: upload.id },
       data: {
         status: "PARSING",
         extractedText: extraction.text,
         extractionWarnings: extraction.warnings,
+        extractionMetadata: {
+          pageCount: extraction.pageCount,
+          truncated: extraction.truncated,
+          pages: extraction.pages.map((page) => ({
+            pageNumber: page.pageNumber,
+            characterCount: page.text.length,
+            lineCount: page.text.split(/\r?\n/).length,
+          })),
+        },
         pageCount: extraction.pageCount,
         scannedLikely: extraction.scannedLikely,
         extractedAt: new Date(),
       },
     });
-    const draft = parseCvText(extraction.text);
     const importRun = await stageCvImport({
       userId,
       cvUploadId: upload.id,
-      draft,
+      draft: parsedDocument.draft,
+      itemMetadata: parsedDocument.itemMetadata,
+      diagnostics: parsedDocument.diagnostics,
+    });
+    await stageCvTechnologySuggestions({
+      userId,
+      cvUploadId: upload.id,
+      sourceName: file.name,
+      text: extraction.pages.map((page) => page.text).join("\n"),
     });
     await db.cvUpload.update({
       where: { id: upload.id },
@@ -122,15 +198,30 @@ export async function POST(request: Request) {
       message: "CV extracted and staged for review.",
     });
   } catch (error) {
+    const diagnostic = extractionErrorDiagnostic(error);
+    if (process.env.NODE_ENV === "development") {
+      console.error("[cv-upload] processing failed", {
+        filename: file.name,
+        mimeType: file.type,
+        fileSize: file.size,
+        bufferLength: data.length,
+        pdfSignature,
+        runtime: process.release.name,
+        nextRuntime: process.env.NEXT_RUNTIME ?? "nodejs",
+        ...diagnostic,
+      });
+    }
     await db.cvUpload.update({
       where: { id: upload.id },
       data: {
         status: "FAILED",
-        extractionError:
-          error instanceof Error ? error.message.slice(0, 2000) : "Unknown error",
+        extractionError: safeError(error),
+        extractionMetadata: {
+          failure: diagnostic,
+        },
         scannedLikely:
           error instanceof CvExtractionError &&
-          error.code === "INSUFFICIENT_TEXT",
+          error.code === "SCANNED_PDF",
       },
     });
     return Response.json({ error: safeError(error), uploadId: upload.id }, { status: 422 });

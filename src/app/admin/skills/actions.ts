@@ -16,6 +16,10 @@ const suggestionActionSchema = z.object({
   suggestionId: z.string().cuid(),
   action: z.enum(["ACCEPT", "IGNORE", "RESTORE"]),
 });
+const bulkSuggestionSchema = z.object({
+  suggestionIds: z.array(z.string().cuid()).min(1).max(500),
+  action: z.enum(["ACCEPT", "IGNORE"]),
+});
 
 function revalidateSkills() {
   revalidatePath("/admin");
@@ -52,7 +56,7 @@ export async function updateSkillSuggestion(
   if (parsed.data.action === "IGNORE") {
     await db.skillSuggestion.update({
       where: { id: suggestion.id },
-      data: { status: "IGNORED" },
+      data: { status: "IGNORED", acceptedAt: null },
     });
     revalidateSkills();
     return {
@@ -64,7 +68,7 @@ export async function updateSkillSuggestion(
   if (parsed.data.action === "RESTORE") {
     await db.skillSuggestion.update({
       where: { id: suggestion.id },
-      data: { status: "PENDING", skillId: null },
+      data: { status: "PENDING", skillId: null, acceptedAt: null },
     });
     revalidateSkills();
     return { success: true, message: "Suggestion restored to pending." };
@@ -90,24 +94,75 @@ export async function updateSkillSuggestion(
           userId: admin.id,
           name: suggestion.displayName,
           category: suggestion.category,
-          status: "DRAFT",
-          sourceType: "GITHUB",
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+          sourceType: suggestion.sourceTypes.includes("CV_IMPORT")
+            ? "CV_IMPORT"
+            : "GITHUB",
           sourceReferenceId: suggestion.id,
           displayOrder: (last?.displayOrder ?? -1) + 1,
         },
       });
       skillId = created.id;
+    } else {
+      await transaction.skill.updateMany({
+        where: { id: skillId, userId: admin.id },
+        data: { status: "PUBLISHED", publishedAt: new Date() },
+      });
     }
     await transaction.skillSuggestion.update({
       where: { id: suggestion.id },
-      data: { status: "ACCEPTED", skillId },
+      data: {
+        status: "ACCEPTED",
+        skillId,
+        acceptedAt: new Date(),
+        publishedAt: new Date(),
+      },
     });
   });
 
   revalidateSkills();
   return {
     success: true,
-    message: "Skill accepted as a draft. Existing manual fields were preserved.",
+    message:
+      "Skill approved for the next portfolio publication. Existing manual fields were preserved.",
+  };
+}
+
+export async function updateSkillSuggestionsBulk(
+  input: unknown,
+): Promise<SkillSuggestionActionResult> {
+  const { admin } = await requireAdminPage("/admin/cv-import");
+  const parsed = bulkSuggestionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "Invalid technology selection." };
+  }
+  const suggestions = await db.skillSuggestion.findMany({
+    where: { userId: admin.id, id: { in: parsed.data.suggestionIds } },
+    select: { id: true },
+  });
+  if (suggestions.length !== new Set(parsed.data.suggestionIds).size) {
+    return { success: false, message: "A technology suggestion was not found." };
+  }
+  if (parsed.data.action === "IGNORE") {
+    await db.skillSuggestion.updateMany({
+      where: { userId: admin.id, id: { in: parsed.data.suggestionIds } },
+      data: { status: "IGNORED", acceptedAt: null },
+    });
+  } else {
+    for (const suggestion of suggestions) {
+      const result = await updateSkillSuggestion({
+        suggestionId: suggestion.id,
+        action: "ACCEPT",
+      });
+      if (!result.success) return result;
+    }
+  }
+  revalidatePath("/admin/cv-import");
+  revalidateSkills();
+  return {
+    success: true,
+    message: `${suggestions.length} technolog${suggestions.length === 1 ? "y" : "ies"} ${parsed.data.action === "ACCEPT" ? "accepted as draft skills" : "ignored"}.`,
   };
 }
 

@@ -1,33 +1,45 @@
-import { PublicationStatus } from "@/generated/prisma/enums";
 import { db } from "@/lib/db";
+import {
+  buildPortfolioPublicationData,
+  type PortfolioPublicationData,
+} from "@/lib/publication";
+
+function hydrateDates(data: PortfolioPublicationData) {
+  return {
+    ...data,
+    experiences: data.experiences.map((item) => ({
+      ...item,
+      startDate: item.startDate ? new Date(item.startDate) : null,
+      endDate: item.endDate ? new Date(item.endDate) : null,
+    })),
+    education: data.education.map((item) => ({
+      ...item,
+      startDate: item.startDate ? new Date(item.startDate) : null,
+      endDate: item.endDate ? new Date(item.endDate) : null,
+    })),
+    projects: data.projects.map((item) => ({
+      ...item,
+      startDate: item.startDate ? new Date(item.startDate) : null,
+      endDate: item.endDate ? new Date(item.endDate) : null,
+    })),
+  };
+}
 
 export async function getPublicPortfolio() {
   const owner = await db.user.findFirst({
     where: { isAdmin: true },
     orderBy: { createdAt: "asc" },
     select: {
-      profile: {
-        where: { status: PublicationStatus.PUBLISHED },
-      },
-      experiences: {
-        where: { status: PublicationStatus.PUBLISHED },
-        orderBy: [{ displayOrder: "asc" }, { startDate: "desc" }],
-      },
-      education: {
-        where: { status: PublicationStatus.PUBLISHED },
-        orderBy: [{ displayOrder: "asc" }, { startDate: "desc" }],
-      },
-      skills: {
-        where: { status: PublicationStatus.PUBLISHED },
-        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
-      },
-      projects: {
-        where: { status: PublicationStatus.PUBLISHED },
-        orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
-      },
-      siteSettings: true,
+      id: true,
+      publication: { select: { data: true } },
     },
   });
+  if (!owner) return null;
 
-  return owner;
+  // Existing installations retain their currently published content until the
+  // first explicit snapshot publication.
+  const data = owner.publication?.data
+    ? (owner.publication.data as unknown as PortfolioPublicationData)
+    : await buildPortfolioPublicationData(db, owner.id);
+  return hydrateDates(data);
 }

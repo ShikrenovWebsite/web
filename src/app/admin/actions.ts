@@ -451,9 +451,9 @@ export async function changeContentStatus(input: unknown): Promise<ActionResult>
       success: true,
       message:
         status === "PUBLISHED"
-          ? "Record published."
+          ? "Record approved for the next portfolio publication."
           : status === "HIDDEN"
-            ? "Record hidden."
+            ? "Record will be hidden after the next publication."
             : "Record moved to drafts.",
     };
   } catch (error) {

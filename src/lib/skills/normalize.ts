@@ -1,5 +1,7 @@
+import { TECHNOLOGY_DICTIONARY } from "@/lib/skills/technology-dictionary";
+
 export type SkillEvidence = {
-  sourceType: "GITHUB_REPOSITORY" | "PORTFOLIO_PROJECT";
+  sourceType: "GITHUB_REPOSITORY" | "PORTFOLIO_PROJECT" | "CV_IMPORT";
   sourceId: string;
   sourceName: string;
   technology: string;
@@ -33,14 +35,26 @@ const aliases: Record<string, { displayName: string; category: string }> = {
   jest: { displayName: "Jest", category: "Testing" },
 };
 
-export function normalizeSkillKey(value: string) {
-  const normalized = value
+function basicNormalize(value: string) {
+  return value
     .normalize("NFKC")
     .trim()
     .toLowerCase()
     .replace(/\.js\b/g, "js")
     .replace(/[^a-z0-9+#]+/g, "");
+}
+
+const technologyAliasKeys = new Map(
+  TECHNOLOGY_DICTIONARY.flatMap((technology) => {
+    const canonical = basicNormalize(technology.name);
+    return technology.aliases.map((alias) => [basicNormalize(alias), canonical]);
+  }),
+);
+
+export function normalizeSkillKey(value: string) {
+  const normalized = basicNormalize(value);
   return (
+    technologyAliasKeys.get(normalized) ??
     {
       postgres: "postgresql",
       tailwind: "tailwindcss",

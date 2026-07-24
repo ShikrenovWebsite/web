@@ -5,6 +5,10 @@ import { Prisma, type ImportItemType } from "@/generated/prisma/client";
 import { z } from "zod";
 import { requireAdminPage } from "@/lib/auth";
 import { schemaForImportItem } from "@/lib/cv/schema";
+import { extractCvText } from "@/lib/cv/extract";
+import { parseCvDocument } from "@/lib/cv/parser";
+import { stageCvImport } from "@/lib/cv/stage";
+import { stageCvTechnologySuggestions } from "@/lib/cv/technologies";
 import { db } from "@/lib/db";
 
 export type CvActionResult = {
@@ -25,6 +29,7 @@ const reviewItemSchema = z.object({
 });
 
 const runSchema = z.object({ importRunId: z.string().cuid() });
+const uploadSchema = z.object({ cvUploadId: z.string().cuid() });
 
 function dateValue(value: unknown) {
   return typeof value === "string" && value
@@ -88,8 +93,15 @@ export async function updateCvImportItem(
       id: parsed.data.itemId,
       importRun: { userId: admin.id },
     },
+    include: { importRun: { select: { status: true } } },
   });
   if (!item) return { success: false, message: "Import item not found." };
+  if (item.importRun.status === "COMPLETED") {
+    return {
+      success: false,
+      message: "Create a new review draft before changing a completed import.",
+    };
+  }
 
   let edited: unknown;
   try {
@@ -202,6 +214,8 @@ async function applyItem(
         ? text(parsed.website)
         : mergeText(existing?.websiteUrl ?? null, parsed.website),
       socialLinks,
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = await transaction.portfolioProfile.upsert({
       where: { userId },
@@ -209,7 +223,8 @@ async function applyItem(
       create: {
         ...data,
         userId,
-        status: "DRAFT",
+        status: "PUBLISHED",
+        publishedAt: new Date(),
         sourceType: "CV_IMPORT",
         sourceReferenceId: item.id,
       },
@@ -252,6 +267,8 @@ async function applyItem(
           ? existing.endDate
           : dateValue(parsed.endDate),
       isCurrent: Boolean(parsed.isCurrent),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.experience.update({ where: { id: existing.id }, data })
@@ -259,7 +276,7 @@ async function applyItem(
           data: {
             ...data,
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
           },
@@ -302,6 +319,8 @@ async function applyItem(
         merging && existing && existing.endDate
           ? existing.endDate
           : dateValue(parsed.endDate),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.education.update({ where: { id: existing.id }, data })
@@ -309,7 +328,7 @@ async function applyItem(
           data: {
             ...data,
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
           },
@@ -330,6 +349,8 @@ async function applyItem(
         merging && existing
           ? mergeText(existing.proficiency, parsed.proficiency)
           : text(parsed.proficiency),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.skill.update({ where: { id: existing.id }, data })
@@ -337,7 +358,7 @@ async function applyItem(
           data: {
             ...data,
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
           },
@@ -388,6 +409,8 @@ async function applyItem(
         merging && existing && existing.endDate
           ? existing.endDate
           : dateValue(parsed.endDate),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.portfolioProject.update({
@@ -399,7 +422,7 @@ async function applyItem(
             ...data,
             slug: await transactionSlug(transaction, userId, title),
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             featured: false,
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
@@ -434,6 +457,8 @@ async function applyItem(
         merging && existing && existing.expiresAt
           ? existing.expiresAt
           : dateValue(parsed.expiresAt),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.certification.update({ where: { id: existing.id }, data })
@@ -441,7 +466,7 @@ async function applyItem(
           data: {
             ...data,
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
           },
@@ -457,6 +482,8 @@ async function applyItem(
         merging && existing
           ? mergeText(existing.proficiency, parsed.proficiency)
           : text(parsed.proficiency),
+      status: "PUBLISHED" as const,
+      publishedAt: new Date(),
     };
     const result = existing
       ? await transaction.language.update({ where: { id: existing.id }, data })
@@ -464,7 +491,7 @@ async function applyItem(
           data: {
             ...data,
             userId,
-            status: "DRAFT",
+            status: "PUBLISHED",
             sourceType: "CV_IMPORT",
             sourceReferenceId: item.id,
           },
@@ -491,6 +518,13 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
   if (run.status === "COMPLETED") {
     return { success: true, message: "This reviewed import was already applied." };
   }
+  const unresolved = run.items.filter((item) => !item.resolution);
+  if (unresolved.length) {
+    return {
+      success: false,
+      message: `${unresolved.length} item${unresolved.length === 1 ? " still needs" : "s still need"} an explicit import or skip decision.`,
+    };
+  }
 
   try {
     await db.$transaction(async (transaction) => {
@@ -512,6 +546,11 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
                 : "ACCEPTED",
             createdRecordId: result.recordId,
             appliedAt: new Date(),
+            publishedAt:
+              result.action === "skipped" ||
+              result.action === "kept_existing"
+                ? null
+                : new Date(),
           },
         });
       }
@@ -545,7 +584,8 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
     revalidatePath("/admin/projects");
     return {
       success: true,
-      message: "Approved CV data was applied transactionally as canonical content.",
+      message:
+        "Approved CV data was applied transactionally and queued for the next portfolio publication.",
     };
   } catch {
     return {
@@ -554,4 +594,104 @@ export async function applyCvImport(input: unknown): Promise<CvActionResult> {
         "The import could not be applied. No canonical changes were committed; the review draft is available for retry.",
     };
   }
+}
+
+export async function reviewCvImportAgain(
+  input: unknown,
+): Promise<CvActionResult & { importRunId?: string }> {
+  const { admin } = await requireAdminPage("/admin/cv-import");
+  const parsed = uploadSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: "Invalid CV upload." };
+  const upload = await db.cvUpload.findFirst({
+    where: { id: parsed.data.cvUploadId, userId: admin.id },
+    include: {
+      mediaAsset: { select: { fileData: true } },
+    },
+  });
+  if (!upload?.mediaAsset.fileData) {
+    return { success: false, message: "The private source file is unavailable." };
+  }
+  try {
+    const extraction = await extractCvText(
+      Buffer.from(upload.mediaAsset.fileData),
+      upload.mimeType,
+    );
+    const parsedDocument = parseCvDocument({
+      pages: extraction.pages,
+      truncated: extraction.truncated,
+      extractionWarnings: extraction.warnings,
+    });
+    const run = await stageCvImport({
+      userId: admin.id,
+      cvUploadId: upload.id,
+      draft: parsedDocument.draft,
+      itemMetadata: parsedDocument.itemMetadata,
+      diagnostics: parsedDocument.diagnostics,
+    });
+    await stageCvTechnologySuggestions({
+      userId: admin.id,
+      cvUploadId: upload.id,
+      sourceName: upload.originalName,
+      text: extraction.pages.map((page) => page.text).join("\n"),
+    });
+    await db.cvUpload.update({
+      where: { id: upload.id },
+      data: {
+        status: "READY_FOR_REVIEW",
+        extractedText: extraction.text,
+        extractionWarnings: extraction.warnings,
+        pageCount: extraction.pageCount,
+        scannedLikely: extraction.scannedLikely,
+        extractedAt: new Date(),
+        extractionMetadata: {
+          pageCount: extraction.pageCount,
+          truncated: extraction.truncated,
+          pages: extraction.pages.map((page) => ({
+            pageNumber: page.pageNumber,
+            characterCount: page.text.length,
+            lineCount: page.text.split(/\r?\n/).length,
+          })),
+        },
+      },
+    });
+    revalidatePath("/admin/cv-import");
+    return {
+      success: true,
+      message: "A fresh review draft was created. Existing portfolio data was not changed.",
+      importRunId: run.id,
+    };
+  } catch {
+    return {
+      success: false,
+      message: "The stored CV could not be parsed again.",
+    };
+  }
+}
+
+export async function deleteCvImportHistory(
+  input: unknown,
+): Promise<CvActionResult> {
+  const { admin } = await requireAdminPage("/admin/cv-import");
+  const parsed = uploadSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: "Invalid CV upload." };
+  const upload = await db.cvUpload.findFirst({
+    where: { id: parsed.data.cvUploadId, userId: admin.id },
+    select: { id: true, mediaAssetId: true },
+  });
+  if (!upload) return { success: false, message: "CV history was not found." };
+  await db.$transaction(async (transaction) => {
+    await transaction.cvUpload.delete({ where: { id: upload.id } });
+    await transaction.mediaAsset.deleteMany({
+      where: {
+        id: upload.mediaAssetId,
+        userId: admin.id,
+        kind: "CV",
+      },
+    });
+  });
+  revalidatePath("/admin/cv-import");
+  return {
+    success: true,
+    message: "CV source and import history deleted. Portfolio records were preserved.",
+  };
 }
