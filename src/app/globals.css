@@ -168,6 +168,34 @@ body {
     var(--font-public-manrope), Arial, Helvetica, system-ui, sans-serif;
 }
 
+.public-content-panel {
+  min-height: calc(100svh - 1.5rem);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow:
+    0 24px 80px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.public-content-panel-backdrop {
+  background: color-mix(in srgb, var(--background) 94%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.public-content-frame {
+  min-height: inherit;
+}
+
+.dark .public-content-panel {
+  border-color: rgb(255 255 255 / 0.1);
+  box-shadow:
+    0 24px 80px rgb(0 0 0 / 0.38),
+    inset 0 1px 0 rgb(255 255 255 / 0.045);
+}
+
+.dark .public-content-panel-backdrop {
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+}
+
 .public-shell {
   width: min(100% - 1.5rem, 56rem);
   margin-inline: auto;
@@ -185,6 +213,18 @@ body {
 .public-section:last-child {
   border-bottom: 1px solid var(--border);
   padding-bottom: clamp(5rem, 10vw, 6rem);
+}
+
+@media (min-width: 40rem) {
+  .public-content-panel {
+    min-height: calc(100svh - 2.5rem);
+  }
+}
+
+@media (min-width: 64rem) {
+  .public-content-panel {
+    min-height: calc(100svh - 4rem);
+  }
 }
 
 @keyframes accordion-down {

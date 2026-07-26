@@ -1,0 +1,86 @@
+.faulty-terminal {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 18% 18%,
+      color-mix(in srgb, #6f9d7d 7%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 78% 64%,
+      color-mix(in srgb, #4d8f68 5%, transparent),
+      transparent 38%
+    );
+  contain: strict;
+  isolation: isolate;
+}
+
+.dark .faulty-terminal {
+  background:
+    radial-gradient(
+      circle at 18% 18%,
+      color-mix(in srgb, #4d8f68 9%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 78% 64%,
+      color-mix(in srgb, #356b52 8%, transparent),
+      transparent 42%
+    ),
+    #0c0f0d;
+}
+
+.faulty-terminal canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.public-terminal-layer {
+  opacity: 0.12;
+}
+
+.dark .public-terminal-layer {
+  opacity: 0.9;
+}
+
+.faulty-terminal[data-webgl="failed"]::after,
+.faulty-terminal[data-webgl="unsupported"]::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, #4d8f68 4%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, #4d8f68 3%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 3rem 1.5rem;
+  content: "";
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 20%,
+    black 80%,
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-terminal-layer {
+    opacity: 0.08;
+  }
+
+  .dark .public-terminal-layer {
+    opacity: 0.72;
+  }
+}

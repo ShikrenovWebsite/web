@@ -52,7 +52,7 @@ export function ThemeProvider({
     useState<ThemePreference>(initialPreference);
 
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -65,8 +65,14 @@ export function ThemeProvider({
 
     const nextPreference = validStoredPreference ?? initialPreference;
 
-    setPreferenceState(nextPreference);
-    setResolvedTheme(applyTheme(nextPreference));
+    const frame = window.requestAnimationFrame(() => {
+      setPreferenceState(nextPreference);
+      setResolvedTheme(applyTheme(nextPreference));
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [initialPreference]);
 
   const setPreference = useCallback((next: ThemePreference) => {
@@ -101,7 +107,7 @@ export function ThemeProvider({
       resolvedTheme,
       setPreference,
     }),
-    [preference, resolvedTheme, setPreference]
+    [preference, resolvedTheme, setPreference],
   );
 
   return (
