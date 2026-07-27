@@ -83,6 +83,7 @@ export function PortfolioHero({
               </div>
             </div>
             <div className="hero-terminal-actions">
+              <span className="terminal-actions-prompt">$ actions</span>
               <a href="#projects">
                 Selected work
                 <ArrowDownRight aria-hidden="true" />

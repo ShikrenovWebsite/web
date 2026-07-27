@@ -1,7 +1,7 @@
 import { EducationList } from "@/components/public/education-list";
 import { ExperienceList } from "@/components/public/experience-list";
-import { FloatingPortfolioDock } from "@/components/public/floating-portfolio-dock";
 import { PortfolioHero } from "@/components/public/portfolio-hero";
+import { PortfolioFloatingNav } from "@/components/public/portfolio-floating-nav";
 import type {
   PublicEducation,
   PublicExperience,
@@ -54,7 +54,7 @@ export default async function HomePage() {
     siteSocialLinks: portfolio?.siteSettings?.socialLinks,
     websiteUrl: profile?.websiteUrl,
     projectSourceUrls: (portfolio?.projects ?? []).map(
-      (project) => project.sourceCodeUrl,
+      (project) => project.sourceCodeUrl
     ),
     email: portfolio?.siteSettings?.contactEmail ?? profile?.email,
   });
@@ -68,7 +68,7 @@ export default async function HomePage() {
       current: item.isCurrent,
       description: item.description ?? "",
       highlights: item.highlights,
-    }),
+    })
   );
   const projects: PublicProject[] = (portfolio?.projects ?? []).map((item) => ({
     id: item.id,
@@ -91,7 +91,7 @@ export default async function HomePage() {
       meta: period(item.startDate, item.endDate),
       description: item.description ?? "",
       achievements: item.achievements,
-    }),
+    })
   );
   const skills: PublicSkill[] = (portfolio?.skills ?? []).map((item) => ({
     id: item.id,
@@ -217,7 +217,11 @@ export default async function HomePage() {
           </div>
         </section>
       </div>
-      <FloatingPortfolioDock socials={socials} />
+      <PortfolioFloatingNav
+        email={socials.email}
+        githubUrl={socials.github}
+        linkedinUrl={socials.linkedin}
+      />
     </>
   );
 }
