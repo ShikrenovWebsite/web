@@ -1,0 +1,19 @@
+.scrambled-text {
+  cursor: default;
+  max-width: none;
+  margin: 0;
+  font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.scrambled-text span {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrambled-text {
+    cursor: text;
+  }
+}

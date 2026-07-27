@@ -2,55 +2,35 @@
 
 import {
   BriefcaseBusiness,
+  FolderGit2,
   GitFork,
-  Home,
+  House,
   Link2,
+  Mail,
   Sparkles,
   UserRound,
-  Workflow,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { ThemeIconToggle } from "@/components/theme/theme-icon-toggle";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import Dock, { type DockItemData } from "@/components/Dock";
 import type { PublicSocialLinks } from "./portfolio-types";
 
 const sections = [
-  { id: "home", label: "Introduction", icon: Home },
-  { id: "about", label: "About", icon: UserRound },
-  { id: "experience", label: "Experience", icon: BriefcaseBusiness },
-  { id: "projects", label: "Projects", icon: Workflow },
+  { id: "intro", label: "Intro", icon: House },
+  { id: "about", label: "About", icon: UserRound, mobileHidden: true },
+  {
+    id: "experience",
+    label: "Experience",
+    icon: BriefcaseBusiness,
+    mobileHidden: true,
+  },
+  { id: "projects", label: "Projects", icon: FolderGit2 },
   { id: "skills", label: "Skills", icon: Sparkles },
-];
+  { id: "contact", label: "Contact", icon: Mail },
+] as const;
 
-function DockAction({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactElement;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-export function FloatingPortfolioDock({
-  socials,
-}: {
-  socials: PublicSocialLinks;
-}) {
-  const [active, setActive] = useState("home");
+function useActiveSection() {
+  const [active, setActive] = useState("intro");
 
   useEffect(() => {
     const targets = sections.flatMap(({ id }) => {
@@ -64,94 +44,90 @@ export function FloatingPortfolioDock({
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
         if (visible[0]?.target.id) setActive(visible[0].target.id);
       },
-      { rootMargin: "-25% 0px -60% 0px", threshold: [0.05, 0.25, 0.5] },
+      { rootMargin: "-22% 0px -62% 0px", threshold: [0, 0.15, 0.35] },
     );
     targets.forEach((target) => observer.observe(target));
     return () => observer.disconnect();
   }, []);
 
-  return (
-    <TooltipProvider delayDuration={180}>
-      <nav
-        aria-label="Portfolio navigation"
-        className="fixed bottom-3 left-1/2 z-40 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-0.5 rounded-xl border bg-background/95 p-1.5 shadow-lg backdrop-blur sm:bottom-5"
-      >
-        {sections.map((section) => {
-          const Icon = section.icon;
-          return (
-            <DockAction key={section.id} label={section.label}>
-              <Button
-                aria-current={active === section.id ? "location" : undefined}
-                aria-label={section.label}
-                asChild
-                className={cn(
-                  "size-9 rounded-lg",
-                  active === section.id &&
-                    "bg-foreground text-background hover:bg-foreground/90 hover:text-background",
-                )}
-                size="icon"
-                variant="ghost"
-              >
-                <a href={`#${section.id}`}>
-                  <Icon aria-hidden="true" className="size-4" />
-                </a>
-              </Button>
-            </DockAction>
-          );
-        })}
+  return active;
+}
 
-        {socials.github || socials.linkedin ? (
-          <>
-            <Separator
-              className="mx-1 hidden h-5 sm:block"
-              orientation="vertical"
-            />
-            <div className="hidden items-center gap-0.5 sm:flex">
-              {socials.github ? (
-                <DockAction label="GitHub">
-                  <Button
-                    aria-label="GitHub"
-                    asChild
-                    className="size-9 rounded-lg"
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <a
-                      href={socials.github}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      <GitFork aria-hidden="true" className="size-4" />
-                    </a>
-                  </Button>
-                </DockAction>
-              ) : null}
-              {socials.linkedin ? (
-                <DockAction label="LinkedIn">
-                  <Button
-                    aria-label="LinkedIn"
-                    asChild
-                    className="size-9 rounded-lg"
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <a
-                      href={socials.linkedin}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      <Link2 aria-hidden="true" className="size-4" />
-                    </a>
-                  </Button>
-                </DockAction>
-              ) : null}
-            </div>
-          </>
-        ) : null}
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+    block: "start",
+  });
+}
 
-        <Separator className="mx-1 h-5" orientation="vertical" />
-        <ThemeIconToggle />
+export function FloatingPortfolioDock({
+  socials,
+}: {
+  socials: PublicSocialLinks;
+}) {
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+  const active = useActiveSection();
+  const dockItems = useMemo<DockItemData[]>(() => {
+    const navigation: DockItemData[] = sections.map(
+      ({ id, label, icon: Icon, ...section }) => ({
+        kind: "action",
+        label,
+        active: active === id,
+        mobileHidden: "mobileHidden" in section && section.mobileHidden,
+        icon: <Icon />,
+        onClick: () => scrollToSection(id),
+      }),
+    );
+    const socialItems: DockItemData[] = [];
+    if (socials.github) {
+      socialItems.push({
+        kind: "link",
+        label: "GitHub",
+        href: socials.github,
+        external: true,
+        icon: <GitFork />,
+      });
+    }
+    if (socials.linkedin) {
+      socialItems.push({
+        kind: "link",
+        label: "LinkedIn",
+        href: socials.linkedin,
+        external: true,
+        icon: <Link2 />,
+      });
+    }
+    if (socials.email) {
+      socialItems.push({
+        kind: "link",
+        label: "Email",
+        href: `mailto:${socials.email}`,
+        icon: <Mail />,
+      });
+    }
+    return [...navigation, ...socialItems];
+  }, [active, socials.email, socials.github, socials.linkedin]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="public-dock-root dark">
+      <nav aria-label="Primary portfolio navigation">
+        <Dock
+          baseItemSize={42}
+          distance={160}
+          items={dockItems}
+          magnification={58}
+          panelHeight={64}
+        />
       </nav>
-    </TooltipProvider>
+    </div>,
+    document.body,
   );
 }

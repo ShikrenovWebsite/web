@@ -2,7 +2,6 @@
 
 import { Color, Mesh, Program, Renderer, Triangle } from "ogl";
 import { type HTMLAttributes, useEffect, useMemo, useRef } from "react";
-import { useTheme } from "@/components/theme/theme-provider";
 import { cn } from "@/lib/utils";
 import "./faulty-terminal.css";
 
@@ -613,9 +612,6 @@ export function FaultyTerminal({
 }
 
 export function PublicFaultyTerminalBackground() {
-  const { resolvedTheme } = useTheme();
-  const dark = resolvedTheme === "dark";
-
   return (
     <>
       <div
@@ -623,23 +619,23 @@ export function PublicFaultyTerminalBackground() {
         className="public-terminal-layer pointer-events-none fixed inset-0 z-0"
       >
         <FaultyTerminal
-          scale={2.4}
+          scale={1.7}
           gridMul={[2, 1]}
-          digitSize={1}
-          timeScale={0.1}
+          digitSize={0.95}
+          timeScale={0.5}
           pause={false}
-          scanlineIntensity={2}
-          glitchAmount={1}
-          flickerAmount={1}
-          noiseAmp={1}
+          scanlineIntensity={0.18}
+          glitchAmount={0.6}
+          flickerAmount={0.42}
+          noiseAmp={0.75}
           chromaticAberration={0}
           dither={0}
-          curvature={0.1}
-          tint="#1cff00"
+          curvature={0.08}
+          tint="#32d716"
           mouseReact
-          mouseStrength={0.2}
+          mouseStrength={0.22}
           pageLoadAnimation
-          brightness={1}
+          brightness={0.58}
         />
       </div>
     </>

@@ -3,6 +3,7 @@ export type PublicExperience = {
   company: string;
   role: string;
   meta: string;
+  current: boolean;
   description: string;
   highlights: string[];
 };

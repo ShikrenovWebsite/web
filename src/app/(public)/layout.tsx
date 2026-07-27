@@ -1,12 +1,6 @@
-import { Manrope } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { PublicFaultyTerminalBackground } from "@/components/public/faulty-terminal";
 import { PublicHeader } from "@/components/public/public-header";
-
-const publicFont = Manrope({
-  subsets: ["cyrillic", "latin"],
-  variable: "--font-public-manrope",
-  display: "swap",
-});
 
 export default function PublicLayout({
   children,
@@ -15,18 +9,14 @@ export default function PublicLayout({
 }) {
   return (
     <div
-      className={`${publicFont.variable} public-site relative isolate min-h-screen overflow-x-clip`}
+      className={`${bodyFont.variable} ${monoFont.variable} ${displayFont.variable} public-site dark relative isolate min-h-screen overflow-x-clip`}
     >
       <PublicFaultyTerminalBackground />
-      <div className="relative z-10 px-3 py-3 sm:px-5 sm:py-5 lg:px-8 lg:py-8">
-        <div className="public-content-panel relative isolate mx-auto w-full max-w-[1200px] rounded-[20px] border sm:rounded-[26px]">
+      <div className="relative z-10 px-2 py-2 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+        <div className="public-content-panel relative isolate mx-auto w-full max-w-[1440px] overflow-hidden rounded-[20px] border sm:rounded-[28px]">
           <div
             aria-hidden="true"
             className="public-content-panel-backdrop pointer-events-none absolute inset-0 z-0 rounded-[inherit]"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit] bg-gradient-to-b from-white/[0.025] to-transparent"
           />
           <div className="public-content-frame relative z-10 flex flex-col">
             <PublicHeader />
@@ -37,3 +27,17 @@ export default function PublicLayout({
     </div>
   );
 }
+const bodyFont = Geist({
+  subsets: ["latin"],
+  variable: "--font-public-body",
+});
+
+const monoFont = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-public-mono",
+});
+
+const displayFont = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-public-display",
+});

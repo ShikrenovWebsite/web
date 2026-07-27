@@ -166,7 +166,9 @@ export function ContentActions({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the record. This action cannot be undone.
+              This permanently removes {label}. Editable CVs will omit it,
+              while historical PDF snapshots remain unchanged. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

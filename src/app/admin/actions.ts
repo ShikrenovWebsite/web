@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { requireAdminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  deleteOwnedContentRecord,
+  pruneDeletedRecordFromPublication,
+} from "@/lib/admin/content-deletion";
 import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 import {
   changeStatusSchema,
@@ -373,33 +378,41 @@ export async function deleteContent(input: unknown): Promise<ActionResult> {
 
   try {
     const { type, id } = parsed.data;
-    let count = 0;
+    const count = await db.$transaction(async (transaction) => {
+      const deleted = await deleteOwnedContentRecord(transaction, {
+        type,
+        id,
+        userId: admin.id,
+      });
+      if (!deleted.count) return 0;
 
-    if (type === "profile") {
-      ({ count } = await db.portfolioProfile.deleteMany({
-        where: { id, userId: admin.id },
-      }));
-    } else if (type === "experience") {
-      ({ count } = await db.experience.deleteMany({
-        where: { id, userId: admin.id },
-      }));
-    } else if (type === "education") {
-      ({ count } = await db.education.deleteMany({
-        where: { id, userId: admin.id },
-      }));
-    } else if (type === "skill") {
-      ({ count } = await db.skill.deleteMany({
-        where: { id, userId: admin.id },
-      }));
-    } else {
-      ({ count } = await db.portfolioProject.deleteMany({
-        where: { id, userId: admin.id },
-      }));
-    }
+      const publication = await transaction.portfolioPublication.findUnique({
+        where: { userId: admin.id },
+        select: { data: true },
+      });
+      if (publication) {
+        const pruned = pruneDeletedRecordFromPublication(
+          publication.data,
+          type,
+          id,
+        );
+        if (pruned.changed) {
+          await transaction.portfolioPublication.update({
+            where: { userId: admin.id },
+            data: { data: pruned.data as Prisma.InputJsonValue },
+          });
+        }
+      }
+      return deleted.count;
+    });
 
     if (!count) return { success: false, message: "Record not found." };
     revalidateContent();
-    return { success: true, message: "Record deleted." };
+    return {
+      success: true,
+      message:
+        "Record deleted. Editable CVs will omit it; historical PDF snapshots are unchanged.",
+    };
   } catch (error) {
     return { success: false, message: messageFromError(error) };
   }

@@ -12,6 +12,7 @@ import type {
 import { ProjectList } from "@/components/public/project-list";
 import { PublicSectionHeading } from "@/components/public/section-heading";
 import { SkillGroups } from "@/components/public/skill-groups";
+import ScrambledText from "@/components/ScrambledText";
 import { getPublicPortfolio } from "@/lib/public-portfolio";
 
 export const dynamic = "force-dynamic";
@@ -70,9 +71,7 @@ function firstSentence(value: string) {
 }
 
 function CompactEmpty({ children }: { children: string }) {
-  return (
-    <p className="border-y py-4 text-sm text-muted-foreground">{children}</p>
-  );
+  return <p className="public-empty">{children}</p>;
 }
 
 export default async function HomePage() {
@@ -98,6 +97,7 @@ export default async function HomePage() {
       company: item.company,
       role: item.role,
       meta: period(item.startDate, item.endDate, item.isCurrent),
+      current: item.isCurrent,
       description: item.description ?? "",
       highlights: item.highlights,
     }),
@@ -130,10 +130,13 @@ export default async function HomePage() {
     name: item.name,
     category: item.category ?? "",
   }));
+  const categories = Array.from(
+    new Set(skills.map((skill) => skill.category).filter(Boolean)),
+  );
 
   return (
     <>
-      <div className="public-shell">
+      <div className="public-page">
         <PortfolioHero
           email={socials.email}
           fullName={fullName}
@@ -142,29 +145,53 @@ export default async function HomePage() {
           introduction={biography ? firstSentence(biography) : ""}
           linkedin={socials.linkedin}
           location={profile?.location ?? ""}
+          stack={skills.map((skill) => skill.name)}
         />
 
-        <section className="public-section" data-portfolio-section id="about">
-          <PublicSectionHeading index="01" title="About" />
-          <div className="mt-5 grid gap-3 sm:grid-cols-[4rem_1fr]">
-            <span aria-hidden="true" />
+        <section className="public-about public-section" data-portfolio-section id="about">
+          <div className="public-about-statement">
+            <PublicSectionHeading index="01" title="About" />
             {biography ? (
-              <p className="max-w-[68ch] whitespace-pre-line text-[0.95rem] leading-7 text-muted-foreground">
-                {biography}
-              </p>
+              <p className="public-about-copy">{biography}</p>
             ) : (
               <CompactEmpty>No about information is published.</CompactEmpty>
             )}
           </div>
+          <div className="public-facts">
+            {profile?.location ? (
+              <article>
+                <span>Based in</span>
+                <strong className="public-display">{profile.location}</strong>
+              </article>
+            ) : null}
+            {headline ? (
+              <article>
+                <span>Role</span>
+                <strong className="public-display">{headline}</strong>
+              </article>
+            ) : null}
+            {skills.length ? (
+              <article>
+                <span>Published toolkit</span>
+                <strong className="public-display">
+                  {skills.length} skills
+                  {categories.length ? ` / ${categories.length} areas` : ""}
+                </strong>
+              </article>
+            ) : null}
+          </div>
         </section>
 
         <section
-          className="public-section"
+          className="public-experience public-section"
           data-portfolio-section
           id="experience"
         >
-          <PublicSectionHeading index="02" title="Experience" />
-          <div className="mt-5 sm:ml-16">
+          <div className="public-section-intro">
+            <PublicSectionHeading index="02" title="Experience" />
+            <p>Selected chapters from the work behind the products.</p>
+          </div>
+          <div>
             {experiences.length ? (
               <ExperienceList items={experiences} />
             ) : (
@@ -174,12 +201,16 @@ export default async function HomePage() {
         </section>
 
         <section
-          className="public-section"
+          className="public-projects public-section"
           data-portfolio-section
           id="projects"
         >
-          <PublicSectionHeading index="03" title="Projects" />
-          <div className="mt-5 sm:ml-16">
+          <PublicSectionHeading
+            index="03"
+            title="Selected work"
+            description="Products, platforms, and technical systems brought from idea to execution."
+          />
+          <div className="public-projects-body">
             {projects.length ? (
               <ProjectList projects={projects} />
             ) : (
@@ -188,13 +219,28 @@ export default async function HomePage() {
           </div>
         </section>
 
+        <section className="public-skills public-section" data-portfolio-section id="skills">
+          <PublicSectionHeading
+            index="04"
+            title="Skills"
+            description="A categorized view of the published toolkit."
+          />
+          <div className="public-skills-body">
+            {skills.length ? (
+              <SkillGroups skills={skills} />
+            ) : (
+              <CompactEmpty>No skills are published.</CompactEmpty>
+            )}
+          </div>
+        </section>
+
         <section
-          className="public-section"
+          className="public-education public-section"
           data-portfolio-section
           id="education"
         >
-          <PublicSectionHeading index="04" title="Education" />
-          <div className="mt-5 sm:ml-16">
+          <PublicSectionHeading index="05" title="Education" />
+          <div className="public-education-body">
             {education.length ? (
               <EducationList items={education} />
             ) : (
@@ -203,14 +249,45 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="public-section" data-portfolio-section id="skills">
-          <PublicSectionHeading index="05" title="Skills" />
-          <div className="mt-5 sm:ml-16">
-            {skills.length ? (
-              <SkillGroups skills={skills} />
-            ) : (
-              <CompactEmpty>No skills are published.</CompactEmpty>
-            )}
+        <section className="public-contact public-section" data-portfolio-section id="contact">
+          <PublicSectionHeading
+            index="06"
+            title="Contact"
+          />
+          <ScrambledText
+            className="public-contact-line public-display"
+            duration={0.8}
+            radius={90}
+            speed={0.35}
+          >
+            Have a project, role, or technical challenge in mind? Let’s talk.
+          </ScrambledText>
+          <div className="public-contact-actions">
+            {socials.email ? (
+              <a className="public-contact-email public-display" href={`mailto:${socials.email}`}>
+                {socials.email}
+              </a>
+            ) : null}
+            {socials.github ? (
+              <a
+                className="public-contact-link"
+                href={socials.github}
+                rel="noreferrer"
+                target="_blank"
+              >
+                GitHub
+              </a>
+            ) : null}
+            {socials.linkedin ? (
+              <a
+                className="public-contact-link"
+                href={socials.linkedin}
+                rel="noreferrer"
+                target="_blank"
+              >
+                LinkedIn
+              </a>
+            ) : null}
           </div>
         </section>
       </div>

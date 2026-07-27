@@ -1,0 +1,18 @@
+.shuffle-parent {
+  display: block;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-transform: inherit;
+}
+
+.shuffle-parent.is-shuffling {
+  color: var(--shuffle-color-from, var(--portfolio-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shuffle-parent {
+    transition: none;
+  }
+}

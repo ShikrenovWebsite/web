@@ -4,29 +4,39 @@ import {
   GitFork,
   Link2,
   Mail,
-  MapPin,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import ASCIIText from "@/components/ASCIIText";
+import Shuffle from "@/components/Shuffle";
 
-function initials(name: string) {
+function TerminalEntry({
+  command,
+  children,
+  prominent = false,
+}: {
+  command: string;
+  children: React.ReactNode;
+  prominent?: boolean;
+}) {
   return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "P"
+    <div className="terminal-entry">
+      <dt>
+        <span aria-hidden="true">$</span> {command}
+      </dt>
+      <dd className={prominent ? "terminal-name public-display" : undefined}>
+        {children}
+      </dd>
+    </div>
   );
 }
 
 export function PortfolioHero({
   fullName,
   headline,
-  introduction,
   location,
   email,
   github,
   linkedin,
+  stack,
 }: {
   fullName: string;
   headline: string;
@@ -35,84 +45,105 @@ export function PortfolioHero({
   email?: string;
   github?: string;
   linkedin?: string;
+  stack: string[];
 }) {
   return (
-    <section
-      className="public-section relative overflow-hidden border-b"
-      data-portfolio-section
-      id="home"
-    >
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/35 to-transparent"
-      />
-      <div className="grid gap-7 sm:grid-cols-[7.5rem_1fr] sm:items-center">
-        <div
-          aria-label={`${fullName} initials avatar`}
-          className="public-heading grid size-24 place-items-center rounded-full border bg-muted text-2xl font-semibold tracking-[-0.05em] sm:size-28"
-          role="img"
-        >
-          {initials(fullName)}
-        </div>
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[0.68rem] tracking-[0.16em] text-muted-foreground">
-              00 / INTRO
-            </span>
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+    <section className="public-hero" data-portfolio-section id="intro">
+      <div className="hero-terminal">
+        <header className="hero-terminal-bar">
+          <span>portfolio-terminal</span>
+          <div aria-hidden="true">
+            <i />
+            <i />
+            <i />
           </div>
-          <h1 className="public-heading mt-4 text-[clamp(2.4rem,8vw,4.6rem)] font-semibold leading-[0.96] tracking-[-0.065em]">
-            {fullName}
-          </h1>
-          <p className="mt-3 text-lg font-medium tracking-[-0.02em] text-muted-foreground sm:text-xl">
-            {headline}
-          </p>
-          {introduction ? (
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
-              {introduction}
-            </p>
-          ) : null}
-          <div className="mt-5 flex flex-wrap items-center gap-2.5">
-            <Button asChild size="sm">
-              <a href="#projects">
-                Explore projects
-                <ArrowDownRight aria-hidden="true" className="size-4" />
-              </a>
-            </Button>
+        </header>
+        <div className="hero-terminal-body">
+          <dl>
+            <TerminalEntry command="whoami" prominent>
+              <Shuffle
+                className="terminal-name-shuffle"
+                duration={0.4}
+                shuffleTimes={2}
+                tag="span"
+                text={fullName.toUpperCase()}
+                threshold={0.15}
+                triggerOnHover
+                triggerOnce
+              />
+            </TerminalEntry>
+            <TerminalEntry command="role">
+              {headline || "Product-minded software engineer"}
+            </TerminalEntry>
+            <TerminalEntry command="location">
+              {location || "Sofia, Bulgaria"}
+            </TerminalEntry>
+            <TerminalEntry command="status">
+              <span className="terminal-status">
+                <i aria-hidden="true" />
+                Available for selected work
+              </span>
+            </TerminalEntry>
+          </dl>
+          <div className="hero-terminal-actions">
+            <a href="#projects">
+              Selected work
+              <ArrowDownRight aria-hidden="true" />
+            </a>
             {email ? (
-              <Button asChild size="sm" variant="outline">
-                <a href={`mailto:${email}`}>
-                  <Mail aria-hidden="true" className="size-4" />
-                  Email
-                </a>
-              </Button>
+              <a href={`mailto:${email}`}>
+                <Mail aria-hidden="true" />
+                Start a conversation
+              </a>
             ) : null}
+          </div>
+          <div className="hero-terminal-socials">
             {github ? (
-              <Button asChild size="sm" variant="ghost">
-                <a href={github} rel="noopener noreferrer" target="_blank">
-                  <GitFork aria-hidden="true" className="size-4" />
-                  GitHub
-                  <ArrowUpRight aria-hidden="true" className="size-3.5" />
-                </a>
-              </Button>
+              <a href={github} rel="noreferrer" target="_blank">
+                <GitFork aria-hidden="true" />
+                GitHub
+                <ArrowUpRight aria-hidden="true" />
+              </a>
             ) : null}
             {linkedin ? (
-              <Button asChild size="sm" variant="ghost">
-                <a href={linkedin} rel="noopener noreferrer" target="_blank">
-                  <Link2 aria-hidden="true" className="size-4" />
-                  LinkedIn
-                  <ArrowUpRight aria-hidden="true" className="size-3.5" />
-                </a>
-              </Button>
-            ) : null}
-            {location ? (
-              <span className="inline-flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
-                <MapPin aria-hidden="true" className="size-3.5" />
-                {location}
-              </span>
+              <a href={linkedin} rel="noreferrer" target="_blank">
+                <Link2 aria-hidden="true" />
+                LinkedIn
+                <ArrowUpRight aria-hidden="true" />
+              </a>
             ) : null}
           </div>
         </div>
+      </div>
+
+      <div className="public-hero-visual">
+        <div className="public-hero-visual-bar">
+          <span>
+            <i />
+            terminal.identity
+          </span>
+          <span>ASCII / PS</span>
+        </div>
+        <div className="public-ascii-stage">
+          <ASCIIText
+            asciiFontSize={7}
+            enableWaves={false}
+            planeBaseHeight={7}
+            text="PS"
+            textColor="#32d716"
+            textFontSize={205}
+          />
+        </div>
+        {stack.length ? (
+          <div className="public-stack-strip">
+            <span>Published stack</span>
+            <div>
+              {stack.slice(0, 4).map((skill) => (
+                <span key={skill}>{skill}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

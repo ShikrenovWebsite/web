@@ -132,9 +132,16 @@ export const contentTypeSchema = z.enum([
   "project",
 ]);
 
+export const portfolioRecordIdSchema = z.string().refine(
+  (value) =>
+    z.string().cuid().safeParse(value).success ||
+    /^seed-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value),
+  "Invalid record ID.",
+);
+
 export const deleteContentSchema = z.object({
   type: contentTypeSchema,
-  id: z.string().cuid(),
+  id: portfolioRecordIdSchema,
 });
 
 export const changeStatusSchema = deleteContentSchema.extend({
@@ -143,7 +150,7 @@ export const changeStatusSchema = deleteContentSchema.extend({
 
 export const reorderContentSchema = z.object({
   type: z.enum(["experience", "education", "skill", "project"]),
-  id: z.string().cuid(),
+  id: portfolioRecordIdSchema,
   direction: z.enum(["up", "down"]),
 });
 

@@ -1,34 +1,44 @@
-import { Badge } from "@/components/ui/badge";
 import type { PublicSkill } from "./portfolio-types";
 
 export function SkillGroups({ skills }: { skills: PublicSkill[] }) {
-  const groups = skills.reduce<Record<string, PublicSkill[]>>(
-    (result, skill) => {
+  const seen = new Set<string>();
+  const groups = Object.entries(
+    skills.reduce<Record<string, PublicSkill[]>>((result, skill) => {
+      const key = skill.name.trim().toLowerCase();
+      if (seen.has(key)) return result;
+      seen.add(key);
       const category = skill.category || "Core skills";
       result[category] = [...(result[category] ?? []), skill];
       return result;
-    },
-    {},
-  );
+    }, {}),
+  )
+    .map(
+      ([category, items]) =>
+        [
+          category,
+          [...items].sort((a, b) => a.name.localeCompare(b.name)),
+        ] as const,
+    )
+    .sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-x-4 gap-y-3">
-      {Object.entries(groups).map(([category, items]) => (
-        <div className="grid min-w-0 content-start gap-1.5" key={category}>
-          <h3 className="truncate font-mono text-[0.62rem] font-semibold uppercase tracking-[0.11em] text-muted-foreground">
-            {category}
-          </h3>
-          <div className="flex flex-wrap gap-1">
+    <div className="skills-matrix">
+      {groups.map(([category, items], groupIndex) => (
+        <article className="skill-group" key={category}>
+          <header>
+            <span>{String(groupIndex + 1).padStart(2, "0")}</span>
+            <h3 className="public-display">{category}</h3>
+            <small>{items.length}</small>
+          </header>
+          <div>
             {items.map((skill) => (
-              <Badge
-                className="rounded-md bg-muted/65 px-1.5 py-0.5 text-[0.68rem] font-normal leading-4 text-foreground"
-                key={skill.id}
-              >
+              <span key={skill.id}>
+                <i aria-hidden="true" />
                 {skill.name}
-              </Badge>
+              </span>
             ))}
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );
