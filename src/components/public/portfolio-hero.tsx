@@ -39,7 +39,6 @@ export function PortfolioHero({
             <i className="is-minimize" />
             <i className="is-expand" />
           </div>
-          <span>portfolio-terminal</span>
         </header>
         <div className="hero-terminal-body">
           <div className="hero-terminal-workspace">
