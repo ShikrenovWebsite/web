@@ -1,5 +1,6 @@
 import {
   addRepositoryToPortfolio,
+  applyAllGitHubProjectFields,
   applyGitHubProjectField,
   applyGitHubCoverImage,
   connectGitHubAccount,
@@ -46,17 +47,19 @@ export async function POST(
                 })
               : action === "organization"
                 ? await setOrganizationSyncPreference(body)
-              : action === "test-access"
-                ? await testGitHubOrganizationAccess(body)
-              : action === "apply"
-                ? await applyGitHubProjectField(body)
-                : action === "cover"
-                  ? await applyGitHubCoverImage(body)
-                : action === "finish"
-                  ? await finishRepositoryChangeReview(body)
-                  : action === "unavailable"
-                    ? await handleUnavailableRepository(body)
-                    : null;
+                : action === "test-access"
+                  ? await testGitHubOrganizationAccess(body)
+                  : action === "apply"
+                    ? await applyGitHubProjectField(body)
+                    : action === "apply-all"
+                      ? await applyAllGitHubProjectFields(body)
+                      : action === "cover"
+                        ? await applyGitHubCoverImage(body)
+                        : action === "finish"
+                          ? await finishRepositoryChangeReview(body)
+                          : action === "unavailable"
+                            ? await handleUnavailableRepository(body)
+                            : null;
 
   if (!result) {
     return Response.json({ error: "Unknown GitHub action." }, { status: 404 });

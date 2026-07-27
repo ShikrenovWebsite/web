@@ -64,10 +64,32 @@ const githubTreeSchema = z.object({
   ),
 });
 
+const githubLanguagesSchema = z.record(
+  z.string(),
+  z.number().int().nonnegative(),
+);
+
+const githubCommitSchema = z.object({
+  sha: z.string().min(1),
+  html_url: z.string().url(),
+  commit: z.object({
+    message: z.string(),
+    author: z
+      .object({
+        name: z.string().nullable(),
+        date: z.string().datetime().nullable(),
+      })
+      .nullable(),
+  }),
+  author: z
+    .object({
+      login: z.string().min(1),
+    })
+    .nullable(),
+});
+
 export type GitHubRepositorySource = z.infer<typeof githubRepositorySchema>;
-export type GitHubOrganizationSource = z.infer<
-  typeof githubOrganizationSchema
->;
+export type GitHubOrganizationSource = z.infer<typeof githubOrganizationSchema>;
 
 export type GitHubListDiagnostics = {
   endpoint: string;
@@ -127,7 +149,9 @@ export function createGitHubClient(token: string) {
       cache: "no-store",
     });
 
-    rateLimit.remaining = numberHeader(response.headers.get("x-ratelimit-remaining"));
+    rateLimit.remaining = numberHeader(
+      response.headers.get("x-ratelimit-remaining"),
+    );
     const reset = numberHeader(response.headers.get("x-ratelimit-reset"));
     rateLimit.resetAt = reset ? new Date(reset * 1000) : null;
 
@@ -140,12 +164,12 @@ export function createGitHubClient(token: string) {
         // GitHub may return an empty or non-JSON response.
       }
 
-      const rateLimited =
-        response.status === 403 && rateLimit.remaining === 0;
+      const rateLimited = response.status === 403 && rateLimit.remaining === 0;
       throw new GitHubApiError(
         rateLimited
           ? "GitHub API rate limit reached. Try again after the reset time."
-          : apiMessage || `GitHub API request failed with status ${response.status}.`,
+          : apiMessage ||
+            `GitHub API request failed with status ${response.status}.`,
         response.status,
         rateLimit.remaining,
         rateLimit.resetAt,
@@ -209,9 +233,7 @@ export function createGitHubClient(token: string) {
       };
     },
 
-    async getOrganizationMembershipWithDiagnostics(
-      organizationLogin: string,
-    ) {
+    async getOrganizationMembershipWithDiagnostics(organizationLogin: string) {
       const endpoint = `/user/memberships/orgs/${encodeURIComponent(organizationLogin)}`;
       const response = await request(endpoint);
       return {
@@ -249,6 +271,72 @@ export function createGitHubClient(token: string) {
         repository: githubRepositorySchema.parse(await response.json()),
         diagnostics: diagnosticsFromResponse(endpoint, response, 1, 1),
       };
+    },
+
+    async getRepositoryLanguages(owner: string, repository: string) {
+      try {
+        const response = await request(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/languages`,
+        );
+        return {
+          languages: githubLanguagesSchema.parse(await response.json()),
+          warning: null,
+        };
+      } catch (error) {
+        return {
+          languages: {},
+          warning:
+            error instanceof Error
+              ? `Language statistics unavailable for ${owner}/${repository}: ${error.message}`
+              : `Language statistics unavailable for ${owner}/${repository}.`,
+        };
+      }
+    },
+
+    async getLatestCommit(
+      owner: string,
+      repository: string,
+      defaultBranch: string | null,
+    ) {
+      if (!defaultBranch) {
+        return { commit: null, warning: null };
+      }
+      try {
+        const response = await request(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/commits?sha=${encodeURIComponent(defaultBranch)}&per_page=1`,
+        );
+        const commits = z
+          .array(githubCommitSchema)
+          .parse(await response.json());
+        const latest = commits[0];
+        return {
+          commit: latest
+            ? {
+                sha: latest.sha,
+                url: latest.html_url,
+                message: latest.commit.message,
+                authorName: latest.commit.author?.name ?? null,
+                authorLogin: latest.author?.login ?? null,
+                authoredAt: latest.commit.author?.date ?? null,
+              }
+            : null,
+          warning: null,
+        };
+      } catch (error) {
+        if (
+          error instanceof GitHubApiError &&
+          (error.status === 404 || error.status === 409)
+        ) {
+          return { commit: null, warning: null };
+        }
+        return {
+          commit: null,
+          warning:
+            error instanceof Error
+              ? `Latest commit unavailable for ${owner}/${repository}: ${error.message}`
+              : `Latest commit unavailable for ${owner}/${repository}.`,
+        };
+      }
     },
 
     async getRepositoryContentInputs(
@@ -399,10 +487,7 @@ export function createGitHubClient(token: string) {
 async function paginate<T>(
   path: string,
   schema: z.ZodType<T>,
-  request: (
-    path: string,
-    accept?: string,
-  ) => Promise<Response>,
+  request: (path: string, accept?: string) => Promise<Response>,
 ) {
   const items: T[] = [];
   let lastResponse: Response | null = null;

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import {
   addRepositoryToPortfolio,
   applyGitHubCoverImage,
+  applyAllGitHubProjectFields,
   applyGitHubProjectField,
   connectGitHubAccount,
   finishRepositoryChangeReview,
@@ -126,6 +127,7 @@ type Repository = {
   status: "PENDING" | "ACCEPTED" | "IGNORED" | "REMOVED";
   project: Project | null;
   pendingChanges: string[];
+  projectDifferences: string[];
   hasUnavailableReview: boolean;
 };
 
@@ -254,7 +256,9 @@ function SourceBadges({ repository }: { repository: Repository }) {
         {githubReviewLabel(repository.status)}
       </Badge>
       <Badge>{repository.visibility}</Badge>
-      <Badge>{repository.ownerType === "ORGANIZATION" ? "Organization" : "User"}</Badge>
+      <Badge>
+        {repository.ownerType === "ORGANIZATION" ? "Organization" : "User"}
+      </Badge>
       {repository.isFork ? <Badge>Fork</Badge> : null}
       {repository.isArchived ? <Badge>Archived</Badge> : null}
       {repository.isTemplate ? <Badge>Template</Badge> : null}
@@ -377,7 +381,10 @@ function RepositoryBody({ repository }: { repository: Repository }) {
           </summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {repository.readmeImages.map((image) => (
-              <div className="overflow-hidden rounded-lg border" key={image.url}>
+              <div
+                className="overflow-hidden rounded-lg border"
+                key={image.url}
+              >
                 <span
                   aria-label={image.alt}
                   className="block aspect-video bg-muted bg-contain bg-center bg-no-repeat"
@@ -440,7 +447,9 @@ function RepositoryHeader({ repository }: { repository: Repository }) {
                 aria-label={`${repository.ownerLogin} avatar`}
                 className="size-9 shrink-0 rounded-full border bg-cover bg-center"
                 role="img"
-                style={{ backgroundImage: `url("${repository.ownerAvatarUrl}")` }}
+                style={{
+                  backgroundImage: `url("${repository.ownerAvatarUrl}")`,
+                }}
               />
             ) : null}
             <CardTitle className="break-words">{repository.fullName}</CardTitle>
@@ -493,7 +502,9 @@ function OwnerCard({ owner }: { owner: GitHubOwner }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-medium">{owner.login}</p>
-              <Badge>{owner.type === "ORGANIZATION" ? "Organization" : "Personal"}</Badge>
+              <Badge>
+                {owner.type === "ORGANIZATION" ? "Organization" : "Personal"}
+              </Badge>
               <Badge className={githubAccessBadgeClass(owner.accessStatus)}>
                 {githubAccessLabel(owner.accessStatus)}
               </Badge>
@@ -514,7 +525,9 @@ function OwnerCard({ owner }: { owner: GitHubOwner }) {
               inspection {owner.lastSuccessfulSyncAtLabel}
             </p>
             {owner.accessMessage ? (
-              <p className="mt-2 text-xs text-warning-foreground">{owner.accessMessage}</p>
+              <p className="mt-2 text-xs text-warning-foreground">
+                {owner.accessMessage}
+              </p>
             ) : null}
           </div>
         </div>
@@ -777,11 +790,7 @@ const comparisonFields = [
   {
     key: "technologies" as const,
     label: "Technologies",
-    sourceFields: [
-      "detectedTechnologies",
-      "topics",
-      "primaryLanguage",
-    ],
+    sourceFields: ["detectedTechnologies", "topics", "primaryLanguage"],
     current: (project: Project) => project.technologies.join(", "),
     incoming: (repository: Repository) =>
       repository.detectedTechnologies.length
@@ -817,61 +826,92 @@ function ChangeReview({ repository }: { repository: Repository }) {
   const { isPending, run } = useGitHubAction();
   if (!repository.project) return null;
 
-  const visibleFields = comparisonFields.filter((field) =>
-    field.sourceFields.some((sourceField) =>
-      repository.pendingChanges.includes(sourceField),
-    ),
+  const visibleFields = comparisonFields.filter(
+    (field) =>
+      repository.projectDifferences.includes(field.key) ||
+      field.sourceFields.some((sourceField) =>
+        repository.pendingChanges.includes(sourceField),
+      ),
   );
 
   return (
     <div className="space-y-4 border-t p-4">
-      <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
         <RefreshCw aria-hidden="true" className="size-4" />
-        Review GitHub changes
+        GitHub updates available
+        <Badge className="bg-transparent">
+          Synced {repository.lastSuccessfulSyncAtLabel}
+        </Badge>
       </div>
-      {(visibleFields.length ? visibleFields : comparisonFields.slice(0, 2)).map(
-        (field) => (
-          <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[1fr_auto_1fr]" key={field.key}>
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Portfolio {field.label}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-                {field.current(repository.project!) || "Not set"}
-              </p>
-            </div>
-            <ArrowRight
-              aria-hidden="true"
-              className="hidden size-4 self-center text-muted-foreground lg:block"
-            />
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                GitHub {field.label}
-              </p>
-              <p className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words text-sm">
-                {field.incoming(repository) || "Not set"}
-              </p>
-              <Button
-                className="mt-2"
-                disabled={isPending}
-                onClick={() =>
-                  run(() =>
-                    applyGitHubProjectField({
-                      repositoryId: repository.id,
-                      field: field.key,
-                    }),
-                  )
-                }
-                size="sm"
-                variant="outline"
-              >
-                Use GitHub value
-              </Button>
-            </div>
+      <div className="flex flex-wrap gap-1.5">
+        {[...new Set(repository.pendingChanges)].map((field) => (
+          <Badge key={field}>
+            {field
+              .replace(/([a-z])([A-Z])/g, "$1 $2")
+              .replace(/^./, (character) => character.toUpperCase())}{" "}
+            changed
+          </Badge>
+        ))}
+      </div>
+      {(visibleFields.length
+        ? visibleFields
+        : comparisonFields.slice(0, 2)
+      ).map((field) => (
+        <div
+          className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[1fr_auto_1fr]"
+          key={field.key}
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Portfolio {field.label}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+              {field.current(repository.project!) || "Not set"}
+            </p>
           </div>
-        ),
-      )}
+          <ArrowRight
+            aria-hidden="true"
+            className="hidden size-4 self-center text-muted-foreground lg:block"
+          />
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              GitHub {field.label}
+            </p>
+            <p className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words text-sm">
+              {field.incoming(repository) || "Not set"}
+            </p>
+            <Button
+              className="mt-2"
+              disabled={isPending}
+              onClick={() =>
+                run(() =>
+                  applyGitHubProjectField({
+                    repositoryId: repository.id,
+                    field: field.key,
+                  }),
+                )
+              }
+              size="sm"
+              variant="outline"
+            >
+              Use GitHub value
+            </Button>
+          </div>
+        </div>
+      ))}
       <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={isPending}
+          onClick={() =>
+            run(() =>
+              applyAllGitHubProjectFields({ repositoryId: repository.id }),
+            )
+          }
+          size="sm"
+        >
+          <PendingIcon pending={isPending} />
+          Update everything
+        </Button>
         <Button
           disabled={isPending}
           onClick={() =>
@@ -880,6 +920,7 @@ function ChangeReview({ repository }: { repository: Repository }) {
             )
           }
           size="sm"
+          variant="outline"
         >
           <PendingIcon pending={isPending} />
           Finish review; keep remaining
@@ -1056,7 +1097,11 @@ function RepositoryGrid({
   );
 }
 
-export function GitHubManager({ connection }: { connection: Connection | null }) {
+export function GitHubManager({
+  connection,
+}: {
+  connection: Connection | null;
+}) {
   const { isPending, run } = useGitHubAction();
   const repositories = connection?.repositories ?? [];
   const groups = {
@@ -1263,7 +1308,9 @@ export function GitHubManager({ connection }: { connection: Connection | null })
               ].map((item) => (
                 <Card key={item.label}>
                   <CardContent className="p-4">
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.label}
+                    </p>
                     <p className="mt-1 text-2xl font-semibold">{item.value}</p>
                   </CardContent>
                 </Card>

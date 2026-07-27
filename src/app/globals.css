@@ -218,7 +218,7 @@ body {
 }
 
 .public-page {
-  padding-bottom: 5.5rem;
+  padding-bottom: 0;
 }
 
 .public-section {
@@ -1285,6 +1285,7 @@ body {
   display: grid;
   grid-template-columns: minmax(14rem, 0.55fr) minmax(0, 1.45fr);
   gap: clamp(3rem, 8vw, 8rem);
+  padding-bottom: 6.5rem;
   background: color-mix(in srgb, var(--portfolio-surface) 48%, transparent);
 }
 

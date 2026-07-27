@@ -3,6 +3,7 @@ import { requireAdminPage } from "@/lib/auth";
 import { formatAdminDateTime } from "@/lib/date";
 import { db } from "@/lib/db";
 import { parseGitHubScopes } from "@/lib/github/scopes";
+import { githubProjectDifferenceFields } from "@/lib/github/project-updates";
 
 export const metadata = { title: "GitHub synchronization" };
 export const dynamic = "force-dynamic";
@@ -202,8 +203,7 @@ export default async function AdminGitHubPage() {
                   process.env.NODE_ENV === "development"
                     ? owner.diagnosticData
                     : null,
-                lastDiscoveredAt:
-                  owner.lastDiscoveredAt?.toISOString() ?? null,
+                lastDiscoveredAt: owner.lastDiscoveredAt?.toISOString() ?? null,
                 lastDiscoveredAtLabel: formatAdminDateTime(
                   owner.lastDiscoveredAt,
                 ),
@@ -213,73 +213,79 @@ export default async function AdminGitHubPage() {
                   owner.lastSuccessfulSyncAt,
                 ),
               })),
-              repositories: connection.repositories.map((repository) => ({
-                id: repository.id,
-                name: repository.name,
-                fullName: repository.fullName,
-                ownerLogin: repository.ownerLogin,
-                ownerType: repository.ownerType,
-                ownerAvatarUrl: repository.ownerAvatarUrl,
-                description: repository.description,
-                githubUrl: repository.githubUrl,
-                homepageUrl: repository.homepageUrl,
-                primaryLanguage: repository.primaryLanguage,
-                topics: repository.topics,
-                starCount: repository.starCount,
-                forkCount: repository.forkCount,
-                visibility: repository.visibility,
-                isArchived: repository.isArchived,
-                isFork: repository.isFork,
-                isTemplate: repository.isTemplate,
-                defaultBranch: repository.defaultBranch,
-                readmePreview: repository.readmePreview,
-                readmeMarkdown: repository.readmeMarkdown,
-                readmeImages: readmeImages(repository.readmeImages),
-                sourceFiles: sourceFiles(repository.sourceFilesSnapshot),
-                enrichmentCategories: enrichmentCategories(
-                  repository.enrichmentSnapshot,
-                ),
-                enrichmentVersion: repository.enrichmentVersion,
-                enrichmentError: repository.enrichmentError,
-                detectedTechnologies: repository.detectedTechnologies,
-                suggestedTitle: repository.suggestedTitle,
-                suggestedShortDescription:
-                  repository.suggestedShortDescription,
-                suggestedLongDescription:
-                  repository.suggestedLongDescription,
-                suggestedCoverImageUrl:
-                  repository.suggestedCoverImageUrl,
-                enrichedAt: repository.enrichedAt?.toISOString() ?? null,
-                enrichedAtLabel: formatAdminDateTime(
-                  repository.enrichedAt,
-                ),
-                githubUpdatedAt:
-                  repository.githubUpdatedAt?.toISOString() ?? null,
-                githubUpdatedAtLabel: formatAdminDateTime(
-                  repository.githubUpdatedAt,
-                ),
-                githubPushedAt:
-                  repository.githubPushedAt?.toISOString() ?? null,
-                githubPushedAtLabel: formatAdminDateTime(
-                  repository.githubPushedAt,
-                ),
-                lastSuccessfulSyncAt:
-                  repository.lastSuccessfulSyncAt?.toISOString() ?? null,
-                lastSuccessfulSyncAtLabel: formatAdminDateTime(
-                  repository.lastSuccessfulSyncAt,
-                ),
-                unavailableAt:
-                  repository.unavailableAt?.toISOString() ?? null,
-                unavailableReason: repository.unavailableReason,
-                status: repository.status,
-                project: repository.project,
-                pendingChanges: repository.syncItems
+              repositories: connection.repositories.map((repository) => {
+                const pendingChanges = repository.syncItems
                   .filter((item) => item.changeType === "UPDATED")
-                  .flatMap((item) => item.fieldsChanged),
-                hasUnavailableReview: repository.syncItems.some(
-                  (item) => item.changeType === "UNAVAILABLE",
-                ),
-              })),
+                  .flatMap((item) => item.fieldsChanged);
+                return {
+                  id: repository.id,
+                  name: repository.name,
+                  fullName: repository.fullName,
+                  ownerLogin: repository.ownerLogin,
+                  ownerType: repository.ownerType,
+                  ownerAvatarUrl: repository.ownerAvatarUrl,
+                  description: repository.description,
+                  githubUrl: repository.githubUrl,
+                  homepageUrl: repository.homepageUrl,
+                  primaryLanguage: repository.primaryLanguage,
+                  topics: repository.topics,
+                  starCount: repository.starCount,
+                  forkCount: repository.forkCount,
+                  visibility: repository.visibility,
+                  isArchived: repository.isArchived,
+                  isFork: repository.isFork,
+                  isTemplate: repository.isTemplate,
+                  defaultBranch: repository.defaultBranch,
+                  readmePreview: repository.readmePreview,
+                  readmeMarkdown: repository.readmeMarkdown,
+                  readmeImages: readmeImages(repository.readmeImages),
+                  sourceFiles: sourceFiles(repository.sourceFilesSnapshot),
+                  enrichmentCategories: enrichmentCategories(
+                    repository.enrichmentSnapshot,
+                  ),
+                  enrichmentVersion: repository.enrichmentVersion,
+                  enrichmentError: repository.enrichmentError,
+                  detectedTechnologies: repository.detectedTechnologies,
+                  suggestedTitle: repository.suggestedTitle,
+                  suggestedShortDescription:
+                    repository.suggestedShortDescription,
+                  suggestedLongDescription: repository.suggestedLongDescription,
+                  suggestedCoverImageUrl: repository.suggestedCoverImageUrl,
+                  enrichedAt: repository.enrichedAt?.toISOString() ?? null,
+                  enrichedAtLabel: formatAdminDateTime(repository.enrichedAt),
+                  githubUpdatedAt:
+                    repository.githubUpdatedAt?.toISOString() ?? null,
+                  githubUpdatedAtLabel: formatAdminDateTime(
+                    repository.githubUpdatedAt,
+                  ),
+                  githubPushedAt:
+                    repository.githubPushedAt?.toISOString() ?? null,
+                  githubPushedAtLabel: formatAdminDateTime(
+                    repository.githubPushedAt,
+                  ),
+                  lastSuccessfulSyncAt:
+                    repository.lastSuccessfulSyncAt?.toISOString() ?? null,
+                  lastSuccessfulSyncAtLabel: formatAdminDateTime(
+                    repository.lastSuccessfulSyncAt,
+                  ),
+                  unavailableAt:
+                    repository.unavailableAt?.toISOString() ?? null,
+                  unavailableReason: repository.unavailableReason,
+                  status: repository.status,
+                  project: repository.project,
+                  pendingChanges,
+                  projectDifferences:
+                    pendingChanges.length && repository.project
+                      ? githubProjectDifferenceFields(
+                          repository.project,
+                          repository,
+                        )
+                      : [],
+                  hasUnavailableReview: repository.syncItems.some(
+                    (item) => item.changeType === "UNAVAILABLE",
+                  ),
+                };
+              }),
             }
           : null
       }

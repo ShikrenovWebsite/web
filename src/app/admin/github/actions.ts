@@ -7,14 +7,12 @@ import {
   auditGitHubRepositorySource,
   synchronizeGitHubRepositories,
 } from "@/lib/github/sync";
-import {
-  decryptGitHubToken,
-  encryptGitHubToken,
-} from "@/lib/github/token";
+import { decryptGitHubToken, encryptGitHubToken } from "@/lib/github/token";
 import {
   hasRequiredGitHubScopes,
   parseGitHubScopes,
 } from "@/lib/github/scopes";
+import { githubProjectValues } from "@/lib/github/project-updates";
 import { db } from "@/lib/db";
 import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 import { getServerEnv } from "@/lib/env";
@@ -128,7 +126,8 @@ export async function connectGitHubAccount(): Promise<GitHubActionResult> {
     if (githubUser.login.toLowerCase() !== configuredLogin.toLowerCase()) {
       return {
         success: false,
-        message: "The authenticated GitHub account is not the configured owner.",
+        message:
+          "The authenticated GitHub account is not the configured owner.",
       };
     }
 
@@ -214,7 +213,8 @@ export async function testGitHubOrganizationAccess(
   if (process.env.NODE_ENV !== "development") {
     return {
       success: false,
-      message: "Detailed GitHub access testing is available in development only.",
+      message:
+        "Detailed GitHub access testing is available in development only.",
     };
   }
 
@@ -222,8 +222,7 @@ export async function testGitHubOrganizationAccess(
   if (!parsed.success) {
     return {
       success: false,
-      message:
-        parsed.error.issues[0]?.message ?? "Invalid GitHub access test.",
+      message: parsed.error.issues[0]?.message ?? "Invalid GitHub access test.",
     };
   }
 
@@ -467,7 +466,9 @@ export async function addRepositoryToPortfolio(
 
       if (!repository) throw new Error("Repository not found.");
       if (repository.unavailableAt) {
-        throw new Error("Unavailable repositories cannot be added until they return.");
+        throw new Error(
+          "Unavailable repositories cannot be added until they return.",
+        );
       }
 
       if (repository.project) {
@@ -567,22 +568,7 @@ export async function applyGitHubProjectField(
     return { success: false, message: "Linked portfolio project not found." };
   }
 
-  const technologies = repository.detectedTechnologies.length
-    ? repository.detectedTechnologies
-    : [repository.primaryLanguage, ...repository.topics].filter(
-        (value): value is string => Boolean(value),
-      );
-  const values = {
-    title: repository.suggestedTitle ?? repository.name,
-    shortDescription:
-      repository.suggestedShortDescription ?? repository.description,
-    longDescription:
-      repository.suggestedLongDescription ?? repository.description,
-    technologies: [...new Set(technologies)],
-    liveUrl: repository.homepageUrl,
-    sourceCodeUrl: repository.githubUrl,
-    coverImageUrl: repository.suggestedCoverImageUrl,
-  };
+  const values = githubProjectValues(repository);
 
   await db.portfolioProject.update({
     where: { id: repository.project.id },
@@ -595,6 +581,49 @@ export async function applyGitHubProjectField(
   return {
     success: true,
     message: "GitHub value applied. Publication settings were unchanged.",
+  };
+}
+
+export async function applyAllGitHubProjectFields(
+  input: unknown,
+): Promise<GitHubActionResult> {
+  const { admin } = await requireAdminPage("/admin/github");
+  const parsed = repositoryIdSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: "Invalid GitHub project update." };
+  }
+
+  const repository = await db.gitHubRepository.findFirst({
+    where: {
+      id: parsed.data.repositoryId,
+      connection: { userId: admin.id },
+    },
+    include: { project: true },
+  });
+  if (!repository?.project) {
+    return { success: false, message: "Linked portfolio project not found." };
+  }
+
+  await db.$transaction([
+    db.portfolioProject.update({
+      where: { id: repository.project.id },
+      data: githubProjectValues(repository),
+    }),
+    db.gitHubSyncItem.updateMany({
+      where: {
+        repositoryId: repository.id,
+        changeType: "UPDATED",
+        reviewedAt: null,
+      },
+      data: { reviewedAt: new Date() },
+    }),
+  ]);
+
+  revalidateGitHub();
+  return {
+    success: true,
+    message:
+      "All current GitHub values were applied. Publication settings were unchanged.",
   };
 }
 
@@ -685,7 +714,10 @@ export async function handleUnavailableRepository(
   const { admin } = await requireAdminPage("/admin/github");
   const parsed = unavailableRepositoryActionSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, message: "Invalid unavailable repository action." };
+    return {
+      success: false,
+      message: "Invalid unavailable repository action.",
+    };
   }
 
   try {
@@ -713,7 +745,10 @@ export async function handleUnavailableRepository(
           where: { id: repository.id },
           data: { status: "REMOVED" },
         });
-      } else if (repository.project && parsed.data.action === "REMOVE_PROJECT") {
+      } else if (
+        repository.project &&
+        parsed.data.action === "REMOVE_PROJECT"
+      ) {
         await transaction.portfolioProject.delete({
           where: { id: repository.project.id },
         });

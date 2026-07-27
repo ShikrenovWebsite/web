@@ -18,15 +18,8 @@ import {
   GITHUB_ENRICHMENT_VERSION,
 } from "@/lib/github/enrichment";
 import { decryptGitHubToken } from "@/lib/github/token";
+import { changedRepositoryMetadataFields } from "@/lib/github/metadata";
 import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
-
-const authoredSourceFields = [
-  "name",
-  "description",
-  "homepageUrl",
-  "primaryLanguage",
-  "topics",
-] as const;
 
 type Snapshot = {
   githubRepositoryId: string;
@@ -42,6 +35,7 @@ type Snapshot = {
   homepageUrl: string | null;
   primaryLanguage: string | null;
   topics: string[];
+  languageStatistics: Record<string, number>;
   starCount: number;
   forkCount: number;
   visibility: string;
@@ -49,6 +43,14 @@ type Snapshot = {
   isFork: boolean;
   isTemplate: boolean;
   defaultBranch: string | null;
+  latestCommit: {
+    sha: string;
+    url: string;
+    message: string;
+    authorName: string | null;
+    authorLogin: string | null;
+    authoredAt: string | null;
+  } | null;
   githubCreatedAt: string | null;
   githubUpdatedAt: string | null;
   githubPushedAt: string | null;
@@ -96,6 +98,7 @@ function snapshotFromRepository(repository: {
     homepageUrl: repository.homepage?.trim() || null,
     primaryLanguage: repository.language,
     topics: [...repository.topics].sort(),
+    languageStatistics: {},
     starCount: repository.stargazers_count,
     forkCount: repository.forks_count,
     visibility: repository.visibility,
@@ -103,6 +106,7 @@ function snapshotFromRepository(repository: {
     isFork: repository.fork,
     isTemplate: repository.is_template,
     defaultBranch: repository.default_branch ?? null,
+    latestCommit: null,
     githubCreatedAt: repository.created_at,
     githubUpdatedAt: repository.updated_at,
     githubPushedAt: repository.pushed_at,
@@ -114,15 +118,6 @@ function previousSnapshot(repository: GitHubRepository) {
   return typeof value === "object" && value && !Array.isArray(value)
     ? (value as Snapshot)
     : null;
-}
-
-function changedFields(previous: Snapshot | null, incoming: Snapshot) {
-  if (!previous) return [...authoredSourceFields];
-
-  return authoredSourceFields.filter(
-    (field) =>
-      JSON.stringify(previous[field]) !== JSON.stringify(incoming[field]),
-  );
 }
 
 export type RepositoryExclusionReason =
@@ -154,7 +149,8 @@ export function repositoryExclusionReasons(
   if (snapshot.visibility !== "public") reasons.push("PRIVATE");
   if (snapshot.isFork && !filters.includeForks) reasons.push("FORK");
   if (snapshot.isArchived && !filters.includeArchived) reasons.push("ARCHIVED");
-  if (snapshot.isTemplate && !filters.includeTemplates) reasons.push("TEMPLATE");
+  if (snapshot.isTemplate && !filters.includeTemplates)
+    reasons.push("TEMPLATE");
   if (context?.ownerEnabled === false) reasons.push("OWNER_DISABLED");
   if (context?.ownerAccessible === false) reasons.push("OWNER_INACCESSIBLE");
   if (!["USER", "ORGANIZATION"].includes(snapshot.ownerType)) {
@@ -350,17 +346,16 @@ export async function synchronizeGitHubRepositories(
       accessibleRepositoryResult,
       existingRepositories,
       existingOwners,
-    ] =
-      await Promise.all([
-        client.getAuthenticatedUser(),
-        client.listAccessiblePublicRepositoriesWithDiagnostics(),
-        db.gitHubRepository.findMany({
-          where: { connectionId: connection.id },
-        }),
-        db.gitHubOwner.findMany({
-          where: { connectionId: connection.id },
-        }),
-      ]);
+    ] = await Promise.all([
+      client.getAuthenticatedUser(),
+      client.listAccessiblePublicRepositoriesWithDiagnostics(),
+      db.gitHubRepository.findMany({
+        where: { connectionId: connection.id },
+      }),
+      db.gitHubOwner.findMany({
+        where: { connectionId: connection.id },
+      }),
+    ]);
     const accessibleRepositories = accessibleRepositoryResult.items;
     const warnings: string[] = [];
     let partialFailures = 0;
@@ -447,8 +442,7 @@ export async function synchronizeGitHubRepositories(
         rawRepositoryCount: personalRepositories.length,
         diagnosticData: {
           requestedScopes: ["read:user", "user:email", "read:org"],
-          grantedScopes:
-            accessibleRepositoryResult.diagnostics.grantedScopes,
+          grantedScopes: accessibleRepositoryResult.diagnostics.grantedScopes,
           repositoryListing: accessibleRepositoryResult.diagnostics,
           ...(process.env.NODE_ENV === "development"
             ? {
@@ -488,7 +482,7 @@ export async function synchronizeGitHubRepositories(
           lastApiStatus:
             repositoriesFromAuthenticatedListing.length > 0
               ? accessibleRepositoryResult.diagnostics.status
-              : organizationDiscoveryDiagnostics?.status ?? null,
+              : (organizationDiscoveryDiagnostics?.status ?? null),
           rawRepositoryCount: repositoriesFromAuthenticatedListing.length,
           diagnosticData: {
             organizationDiscovery: organizationDiscoveryDiagnostics,
@@ -504,11 +498,12 @@ export async function synchronizeGitHubRepositories(
         continue;
       }
 
-      const repositoriesFromAuthenticatedListing = accessibleRepositories.filter(
-        (repository) =>
-          repository.owner.type === "Organization" &&
-          String(repository.owner.id) === candidate.githubOwnerId,
-      );
+      const repositoriesFromAuthenticatedListing =
+        accessibleRepositories.filter(
+          (repository) =>
+            repository.owner.type === "Organization" &&
+            String(repository.owner.id) === candidate.githubOwnerId,
+        );
       sourceRepositoryGroups.push(repositoriesFromAuthenticatedListing);
 
       try {
@@ -549,15 +544,13 @@ export async function synchronizeGitHubRepositories(
           ...candidate,
           syncEnabled,
           type: "ORGANIZATION",
-          accessStatus: !hasReadOrg
-            ? "REAUTHORIZATION_REQUIRED"
-            : "ACCESSIBLE",
+          accessStatus: !hasReadOrg ? "REAUTHORIZATION_REQUIRED" : "ACCESSIBLE",
           accessMessage: !hasReadOrg
             ? "Reconnect GitHub to grant read:org for reliable organization membership discovery."
-            : membershipWarning ??
+            : (membershipWarning ??
               (repositoriesFromAuthenticatedListing.length === 0
-              ? "Public repositories are accessible through the organization endpoint, but GitHub omitted this organization from the authenticated-user listings."
-              : null),
+                ? "Public repositories are accessible through the organization endpoint, but GitHub omitted this organization from the authenticated-user listings."
+                : null)),
           inspectionSucceeded: true,
           lastApiStatus: organizationResult.diagnostics.status,
           rawRepositoryCount: organizationRepositories.length,
@@ -567,8 +560,7 @@ export async function synchronizeGitHubRepositories(
             organizationDiscovery: organizationDiscoveryDiagnostics,
             authenticatedUserRepositoryListing:
               accessibleRepositoryResult.diagnostics,
-            organizationRepositoryListing:
-              organizationResult.diagnostics,
+            organizationRepositoryListing: organizationResult.diagnostics,
             organizationApprovalState,
             membershipWarning,
             ...(process.env.NODE_ENV === "development"
@@ -595,8 +587,7 @@ export async function synchronizeGitHubRepositories(
           accessStatus: access.status,
           accessMessage: access.message,
           inspectionSucceeded: false,
-          lastApiStatus:
-            error instanceof GitHubApiError ? error.status : null,
+          lastApiStatus: error instanceof GitHubApiError ? error.status : null,
           rawRepositoryCount: 0,
           diagnosticData: {
             organizationDiscovery: organizationDiscoveryDiagnostics,
@@ -665,10 +656,9 @@ export async function synchronizeGitHubRepositories(
         continue;
       }
 
-      const previous = existing ? previousSnapshot(existing) : null;
-      const fieldsChanged: string[] = changedFields(previous, snapshot);
       let readmePreview = existing?.readmePreview ?? null;
       let readmeMarkdown = existing?.readmeMarkdown ?? null;
+      let readmeChanged = false;
       let readmeImages =
         (existing?.readmeImages as Prisma.InputJsonValue | null | undefined) ??
         null;
@@ -684,37 +674,65 @@ export async function synchronizeGitHubRepositories(
           | undefined) ?? null;
       let enrichmentFingerprint = existing?.enrichmentFingerprint ?? null;
       let enrichmentVersion = existing?.enrichmentVersion ?? 0;
-      let enrichmentError: string | null =
-        existing?.enrichmentError ?? null;
+      let enrichmentError: string | null = existing?.enrichmentError ?? null;
       let detectedTechnologies = existing?.detectedTechnologies ?? [];
       let suggestedTitle = existing?.suggestedTitle ?? null;
       let suggestedShortDescription =
         existing?.suggestedShortDescription ?? null;
-      let suggestedLongDescription =
-        existing?.suggestedLongDescription ?? null;
-      let suggestedCoverImageUrl =
-        existing?.suggestedCoverImageUrl ?? null;
+      let suggestedLongDescription = existing?.suggestedLongDescription ?? null;
+      let suggestedCoverImageUrl = existing?.suggestedCoverImageUrl ?? null;
       let enrichedAt = existing?.enrichedAt ?? null;
+
+      if (!unavailableReason) {
+        const [languages, latestCommit, readme] = await Promise.all([
+          client.getRepositoryLanguages(snapshot.ownerLogin, snapshot.name),
+          client.getLatestCommit(
+            snapshot.ownerLogin,
+            snapshot.name,
+            snapshot.defaultBranch,
+          ),
+          client.getReadmeMarkdown(snapshot.ownerLogin, snapshot.name),
+        ]);
+        snapshot.languageStatistics = languages.languages;
+        snapshot.latestCommit = latestCommit.commit;
+        if (languages.warning) warnings.push(languages.warning);
+        if (latestCommit.warning) warnings.push(latestCommit.warning);
+        if (readme.warning) {
+          warnings.push(readme.warning);
+        } else {
+          readmeChanged = readmeMarkdown !== readme.markdown;
+          readmeMarkdown = readme.markdown;
+          readmePreview = readme.markdown?.slice(0, 5000) ?? null;
+        }
+      }
+
+      const previous = existing ? previousSnapshot(existing) : null;
+      const fieldsChanged: string[] = changedRepositoryMetadataFields(
+        previous,
+        snapshot,
+      );
+      if (existing && readmeChanged) fieldsChanged.push("readmeMarkdown");
 
       const shouldEnrich =
         !unavailableReason &&
         (!existing ||
           existing.enrichmentVersion < GITHUB_ENRICHMENT_VERSION ||
           !existing.enrichmentFingerprint ||
+          readmeChanged ||
+          fieldsChanged.some((field) =>
+            [
+              "name",
+              "description",
+              "primaryLanguage",
+              "topics",
+              "defaultBranch",
+            ].includes(field),
+          ) ||
           existing.githubPushedAt?.getTime() !==
             date(snapshot.githubPushedAt)?.getTime());
 
       if (shouldEnrich) {
         enrichmentError = null;
-        const readme = await client.getReadmeMarkdown(
-          snapshot.ownerLogin,
-          snapshot.name,
-        );
-        if (!readme.warning) {
-          readmeMarkdown = readme.markdown;
-          readmePreview = readme.markdown?.slice(0, 5000) ?? null;
-        }
-        if (readme.warning) warnings.push(readme.warning);
         try {
           const content = snapshot.defaultBranch
             ? await client.getRepositoryContentInputs(
@@ -757,23 +775,19 @@ export async function synchronizeGitHubRepositories(
             suggestedLongDescription:
               existing?.suggestedLongDescription ?? null,
             detectedTechnologies: existing?.detectedTechnologies ?? [],
-            suggestedCoverImageUrl:
-              existing?.suggestedCoverImageUrl ?? null,
+            suggestedCoverImageUrl: existing?.suggestedCoverImageUrl ?? null,
           };
           const nextSuggestions = {
             suggestedTitle: enrichment.suggestions.title,
-            suggestedShortDescription:
-              enrichment.suggestions.shortDescription,
-            suggestedLongDescription:
-              enrichment.suggestions.longDescription,
+            suggestedShortDescription: enrichment.suggestions.shortDescription,
+            suggestedLongDescription: enrichment.suggestions.longDescription,
             detectedTechnologies: enrichment.detectedTechnologies,
-            suggestedCoverImageUrl:
-              enrichment.suggestions.coverImageUrl,
+            suggestedCoverImageUrl: enrichment.suggestions.coverImageUrl,
           };
           if (existing) {
-            for (const field of Object.keys(
-              nextSuggestions,
-            ) as Array<keyof typeof nextSuggestions>) {
+            for (const field of Object.keys(nextSuggestions) as Array<
+              keyof typeof nextSuggestions
+            >) {
               if (
                 JSON.stringify(previousSuggestions[field]) !==
                 JSON.stringify(nextSuggestions[field])
@@ -795,12 +809,9 @@ export async function synchronizeGitHubRepositories(
           enrichmentVersion = enrichment.version;
           detectedTechnologies = enrichment.detectedTechnologies;
           suggestedTitle = enrichment.suggestions.title;
-          suggestedShortDescription =
-            enrichment.suggestions.shortDescription;
-          suggestedLongDescription =
-            enrichment.suggestions.longDescription;
-          suggestedCoverImageUrl =
-            enrichment.suggestions.coverImageUrl;
+          suggestedShortDescription = enrichment.suggestions.shortDescription;
+          suggestedLongDescription = enrichment.suggestions.longDescription;
+          suggestedCoverImageUrl = enrichment.suggestions.coverImageUrl;
           enrichedAt = new Date();
         } catch (error) {
           enrichmentError =
@@ -851,8 +862,7 @@ export async function synchronizeGitHubRepositories(
       for (const owner of ownerStates) {
         const ownerRepositories = sourceRepositories.filter(
           (repository) =>
-            repository.owner.login.toLowerCase() ===
-            owner.login.toLowerCase(),
+            repository.owner.login.toLowerCase() === owner.login.toLowerCase(),
         );
         const filterAudit = ownerFilterAudit(
           ownerRepositories,
@@ -938,8 +948,7 @@ export async function synchronizeGitHubRepositories(
             },
           },
           update: {
-            ownerRecordId:
-              ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
+            ownerRecordId: ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
             nodeId: snapshot.nodeId,
             ownerLogin: snapshot.ownerLogin,
             ownerType: snapshot.ownerType,
@@ -960,23 +969,17 @@ export async function synchronizeGitHubRepositories(
             defaultBranch: snapshot.defaultBranch,
             readmePreview: item.readmePreview,
             readmeMarkdown: item.readmeMarkdown,
-            readmeImages:
-              item.readmeImages ?? Prisma.JsonNull,
-            sourceFilesSnapshot:
-              item.sourceFilesSnapshot ?? Prisma.JsonNull,
-            enrichmentSnapshot:
-              item.enrichmentSnapshot ?? Prisma.JsonNull,
+            readmeImages: item.readmeImages ?? Prisma.JsonNull,
+            sourceFilesSnapshot: item.sourceFilesSnapshot ?? Prisma.JsonNull,
+            enrichmentSnapshot: item.enrichmentSnapshot ?? Prisma.JsonNull,
             enrichmentFingerprint: item.enrichmentFingerprint,
             enrichmentVersion: item.enrichmentVersion,
             enrichmentError: item.enrichmentError,
             detectedTechnologies: item.detectedTechnologies,
             suggestedTitle: item.suggestedTitle,
-            suggestedShortDescription:
-              item.suggestedShortDescription,
-            suggestedLongDescription:
-              item.suggestedLongDescription,
-            suggestedCoverImageUrl:
-              item.suggestedCoverImageUrl,
+            suggestedShortDescription: item.suggestedShortDescription,
+            suggestedLongDescription: item.suggestedLongDescription,
+            suggestedCoverImageUrl: item.suggestedCoverImageUrl,
             enrichedAt: item.enrichedAt,
             githubCreatedAt: date(snapshot.githubCreatedAt),
             githubUpdatedAt: date(snapshot.githubUpdatedAt),
@@ -989,8 +992,7 @@ export async function synchronizeGitHubRepositories(
           },
           create: {
             connectionId: connection.id,
-            ownerRecordId:
-              ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
+            ownerRecordId: ownerRecordIds.get(snapshot.githubOwnerId) ?? null,
             githubRepositoryId: snapshot.githubRepositoryId,
             nodeId: snapshot.nodeId,
             ownerLogin: snapshot.ownerLogin,
@@ -1012,23 +1014,17 @@ export async function synchronizeGitHubRepositories(
             defaultBranch: snapshot.defaultBranch,
             readmePreview: item.readmePreview,
             readmeMarkdown: item.readmeMarkdown,
-            readmeImages:
-              item.readmeImages ?? Prisma.JsonNull,
-            sourceFilesSnapshot:
-              item.sourceFilesSnapshot ?? Prisma.JsonNull,
-            enrichmentSnapshot:
-              item.enrichmentSnapshot ?? Prisma.JsonNull,
+            readmeImages: item.readmeImages ?? Prisma.JsonNull,
+            sourceFilesSnapshot: item.sourceFilesSnapshot ?? Prisma.JsonNull,
+            enrichmentSnapshot: item.enrichmentSnapshot ?? Prisma.JsonNull,
             enrichmentFingerprint: item.enrichmentFingerprint,
             enrichmentVersion: item.enrichmentVersion,
             enrichmentError: item.enrichmentError,
             detectedTechnologies: item.detectedTechnologies,
             suggestedTitle: item.suggestedTitle,
-            suggestedShortDescription:
-              item.suggestedShortDescription,
-            suggestedLongDescription:
-              item.suggestedLongDescription,
-            suggestedCoverImageUrl:
-              item.suggestedCoverImageUrl,
+            suggestedShortDescription: item.suggestedShortDescription,
+            suggestedLongDescription: item.suggestedLongDescription,
+            suggestedCoverImageUrl: item.suggestedCoverImageUrl,
             enrichedAt: item.enrichedAt,
             githubCreatedAt: date(snapshot.githubCreatedAt),
             githubUpdatedAt: date(snapshot.githubUpdatedAt),
@@ -1115,7 +1111,9 @@ export async function synchronizeGitHubRepositories(
           warningCount: warnings.length,
           rateLimitRemaining: client.rateLimit.remaining,
           rateLimitResetAt: client.rateLimit.resetAt,
-          errorMessage: warnings.length ? warnings.slice(0, 10).join("\n") : null,
+          errorMessage: warnings.length
+            ? warnings.slice(0, 10).join("\n")
+            : null,
           completedAt: now,
         },
       });
@@ -1125,8 +1123,7 @@ export async function synchronizeGitHubRepositories(
         personalRepositoriesFound: personalRepositories.length,
         organizationsDiscovered: organizationCandidates.filter(
           (owner) =>
-            owner.discoveredFromOrganizations ||
-            owner.inferredFromRepositories,
+            owner.discoveredFromOrganizations || owner.inferredFromRepositories,
         ).length,
         organizationRepositoriesFound: sourceRepositories.filter(
           (repository) => repository.owner.type === "Organization",
@@ -1154,7 +1151,9 @@ export async function synchronizeGitHubRepositories(
       data: {
         status: "FAILED",
         errorMessage:
-          error instanceof Error ? error.message : "GitHub synchronization failed.",
+          error instanceof Error
+            ? error.message
+            : "GitHub synchronization failed.",
         rateLimitRemaining: githubError?.rateLimitRemaining ?? null,
         rateLimitResetAt: githubError?.rateLimitResetAt ?? null,
         completedAt: new Date(),
