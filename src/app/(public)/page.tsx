@@ -12,7 +12,7 @@ import type {
 import { ProjectList } from "@/components/public/project-list";
 import { PublicSectionHeading } from "@/components/public/section-heading";
 import { SkillGroups } from "@/components/public/skill-groups";
-import ScrambledText from "@/components/ScrambledText";
+import MagnetLines from "@/components/MagnetLines";
 import { getPublicPortfolio } from "@/lib/public-portfolio";
 
 export const dynamic = "force-dynamic";
@@ -130,10 +130,6 @@ export default async function HomePage() {
     name: item.name,
     category: item.category ?? "",
   }));
-  const categories = Array.from(
-    new Set(skills.map((skill) => skill.category).filter(Boolean)),
-  );
-
   return (
     <>
       <div className="public-page">
@@ -145,10 +141,13 @@ export default async function HomePage() {
           introduction={biography ? firstSentence(biography) : ""}
           linkedin={socials.linkedin}
           location={profile?.location ?? ""}
-          stack={skills.map((skill) => skill.name)}
         />
 
-        <section className="public-about public-section" data-portfolio-section id="about">
+        <section
+          className="public-about public-section"
+          data-portfolio-section
+          id="about"
+        >
           <div className="public-about-statement">
             <PublicSectionHeading index="01" title="About" />
             {biography ? (
@@ -175,7 +174,6 @@ export default async function HomePage() {
                 <span>Published toolkit</span>
                 <strong className="public-display">
                   {skills.length} skills
-                  {categories.length ? ` / ${categories.length} areas` : ""}
                 </strong>
               </article>
             ) : null}
@@ -219,11 +217,15 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="public-skills public-section" data-portfolio-section id="skills">
+        <section
+          className="public-skills public-section"
+          data-portfolio-section
+          id="skills"
+        >
           <PublicSectionHeading
             index="04"
             title="Skills"
-            description="A categorized view of the published toolkit."
+            description="The complete published toolkit, ready to scan."
           />
           <div className="public-skills-body">
             {skills.length ? (
@@ -249,46 +251,22 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="public-contact public-section" data-portfolio-section id="contact">
-          <PublicSectionHeading
-            index="06"
-            title="Contact"
-          />
-          <ScrambledText
-            className="public-contact-line public-display"
-            duration={0.8}
-            radius={90}
-            speed={0.35}
-          >
-            Have a project, role, or technical challenge in mind? Let’s talk.
-          </ScrambledText>
-          <div className="public-contact-actions">
-            {socials.email ? (
-              <a className="public-contact-email public-display" href={`mailto:${socials.email}`}>
-                {socials.email}
-              </a>
-            ) : null}
-            {socials.github ? (
-              <a
-                className="public-contact-link"
-                href={socials.github}
-                rel="noreferrer"
-                target="_blank"
-              >
-                GitHub
-              </a>
-            ) : null}
-            {socials.linkedin ? (
-              <a
-                className="public-contact-link"
-                href={socials.linkedin}
-                rel="noreferrer"
-                target="_blank"
-              >
-                LinkedIn
-              </a>
-            ) : null}
+        <section className="public-connect" id="connect">
+          <div className="public-connect-visual">
+            <MagnetLines
+              baseAngle={-12}
+              columns={18}
+              containerSize="100%"
+              lineColor="#32d716"
+              lineHeight="clamp(1.1rem, 2vw, 1.85rem)"
+              lineWidth="2px"
+              rows={9}
+            />
           </div>
+          <div aria-hidden="true" className="public-connect-scrim" />
+          <span aria-hidden="true" className="public-connect-label">
+            signal.open()
+          </span>
         </section>
       </div>
       <FloatingPortfolioDock socials={socials} />

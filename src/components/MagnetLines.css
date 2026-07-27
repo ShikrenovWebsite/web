@@ -1,0 +1,32 @@
+.magnet-lines {
+  display: grid;
+  width: var(--magnet-size);
+  height: var(--magnet-size);
+  grid-template-columns: repeat(var(--magnet-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--magnet-rows), minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+  contain: layout paint style;
+  touch-action: pan-y;
+}
+
+.magnet-lines [data-magnet-line] {
+  display: block;
+  border-radius: 999px;
+  opacity: 0.68;
+  transform: rotate(var(--rotate));
+  transform-origin: center;
+  transition:
+    opacity 160ms ease,
+    transform 90ms linear;
+}
+
+.magnet-lines:hover [data-magnet-line] {
+  opacity: 0.86;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .magnet-lines [data-magnet-line] {
+    transition: none;
+  }
+}

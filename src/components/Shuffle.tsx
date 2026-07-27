@@ -76,7 +76,7 @@ export default function Shuffle({
     timerRef.current = setInterval(() => {
       const progress = Math.min(
         (performance.now() - startedAt) / durationMs,
-        1,
+        1
       );
       const revealed = Math.floor(text.length * progress);
       setDisplayText(
@@ -91,7 +91,7 @@ export default function Shuffle({
             }
             return GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
           })
-          .join(""),
+          .join("")
       );
       if (progress >= 1) stop();
     }, 42);
@@ -108,7 +108,7 @@ export default function Shuffle({
           if (triggerOnce) observer.disconnect();
         }
       },
-      { threshold, rootMargin: "0px 0px -8% 0px" },
+      { threshold, rootMargin: "0px 0px -8% 0px" }
     );
     observer.observe(element);
     return () => {

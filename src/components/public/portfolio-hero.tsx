@@ -5,26 +5,21 @@ import {
   Link2,
   Mail,
 } from "lucide-react";
-import ASCIIText from "@/components/ASCIIText";
-import Shuffle from "@/components/Shuffle";
 
 function TerminalEntry({
   command,
   children,
-  prominent = false,
 }: {
   command: string;
   children: React.ReactNode;
-  prominent?: boolean;
 }) {
   return (
     <div className="terminal-entry">
       <dt>
-        <span aria-hidden="true">$</span> {command}
+        <span aria-hidden="true">$</span>
+        <code>{command}</code>
       </dt>
-      <dd className={prominent ? "terminal-name public-display" : undefined}>
-        {children}
-      </dd>
+      <dd>{children}</dd>
     </div>
   );
 }
@@ -36,7 +31,6 @@ export function PortfolioHero({
   email,
   github,
   linkedin,
-  stack,
 }: {
   fullName: string;
   headline: string;
@@ -45,32 +39,24 @@ export function PortfolioHero({
   email?: string;
   github?: string;
   linkedin?: string;
-  stack: string[];
 }) {
   return (
     <section className="public-hero" data-portfolio-section id="intro">
       <div className="hero-terminal">
         <header className="hero-terminal-bar">
-          <span>portfolio-terminal</span>
-          <div aria-hidden="true">
-            <i />
-            <i />
-            <i />
+          <div aria-hidden="true" className="hero-terminal-controls">
+            <i className="is-close" />
+            <i className="is-minimize" />
+            <i className="is-expand" />
           </div>
+          <span>portfolio-terminal</span>
         </header>
         <div className="hero-terminal-body">
           <dl>
-            <TerminalEntry command="whoami" prominent>
-              <Shuffle
-                className="terminal-name-shuffle"
-                duration={0.4}
-                shuffleTimes={2}
-                tag="span"
-                text={fullName.toUpperCase()}
-                threshold={0.15}
-                triggerOnHover
-                triggerOnce
-              />
+            <TerminalEntry command="whoami">
+              <strong className="terminal-person-name public-display">
+                {fullName}
+              </strong>
             </TerminalEntry>
             <TerminalEntry command="role">
               {headline || "Product-minded software engineer"}
@@ -85,16 +71,29 @@ export function PortfolioHero({
               </span>
             </TerminalEntry>
           </dl>
+          <div
+            aria-label="Terminal ready for the next command"
+            className="terminal-ready-prompt"
+            role="status"
+          >
+            <span aria-hidden="true">$</span>
+            <i aria-hidden="true" className="terminal-caret" />
+          </div>
           <div className="hero-terminal-actions">
             <a href="#projects">
               Selected work
               <ArrowDownRight aria-hidden="true" />
             </a>
             {email ? (
-              <a href={`mailto:${email}`}>
-                <Mail aria-hidden="true" />
-                Start a conversation
-              </a>
+              <>
+                <a href={`mailto:${email}`}>
+                  <Mail aria-hidden="true" />
+                  Start a conversation
+                </a>
+                <a className="hero-terminal-email" href={`mailto:${email}`}>
+                  {email}
+                </a>
+              </>
             ) : null}
           </div>
           <div className="hero-terminal-socials">
@@ -114,36 +113,6 @@ export function PortfolioHero({
             ) : null}
           </div>
         </div>
-      </div>
-
-      <div className="public-hero-visual">
-        <div className="public-hero-visual-bar">
-          <span>
-            <i />
-            terminal.identity
-          </span>
-          <span>ASCII / PS</span>
-        </div>
-        <div className="public-ascii-stage">
-          <ASCIIText
-            asciiFontSize={7}
-            enableWaves={false}
-            planeBaseHeight={7}
-            text="PS"
-            textColor="#32d716"
-            textFontSize={205}
-          />
-        </div>
-        {stack.length ? (
-          <div className="public-stack-strip">
-            <span>Published stack</span>
-            <div>
-              {stack.slice(0, 4).map((skill) => (
-                <span key={skill}>{skill}</span>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   );

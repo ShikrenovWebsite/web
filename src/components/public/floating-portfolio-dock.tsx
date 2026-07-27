@@ -3,15 +3,14 @@
 import {
   BriefcaseBusiness,
   FolderGit2,
-  GitFork,
   House,
-  Link2,
   Mail,
   Sparkles,
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { FaGithub, FaLinkedinIn } from "react-icons/fa6";
 import Dock, { type DockItemData } from "@/components/Dock";
 import type { PublicSocialLinks } from "./portfolio-types";
 
@@ -26,7 +25,6 @@ const sections = [
   },
   { id: "projects", label: "Projects", icon: FolderGit2 },
   { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "contact", label: "Contact", icon: Mail },
 ] as const;
 
 function useActiveSection() {
@@ -91,7 +89,7 @@ export function FloatingPortfolioDock({
         label: "GitHub",
         href: socials.github,
         external: true,
-        icon: <GitFork />,
+        icon: <FaGithub />,
       });
     }
     if (socials.linkedin) {
@@ -100,7 +98,7 @@ export function FloatingPortfolioDock({
         label: "LinkedIn",
         href: socials.linkedin,
         external: true,
-        icon: <Link2 />,
+        icon: <FaLinkedinIn />,
       });
     }
     if (socials.email) {

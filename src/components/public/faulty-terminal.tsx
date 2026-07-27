@@ -624,18 +624,18 @@ export function PublicFaultyTerminalBackground() {
           digitSize={0.95}
           timeScale={0.5}
           pause={false}
-          scanlineIntensity={0.18}
+          scanlineIntensity={0.5}
           glitchAmount={0.6}
           flickerAmount={0.42}
           noiseAmp={0.75}
           chromaticAberration={0}
           dither={0}
           curvature={0.08}
-          tint="#32d716"
+          tint="#00ff12"
           mouseReact
           mouseStrength={0.22}
           pageLoadAnimation
-          brightness={0.58}
+          brightness={1}
         />
       </div>
     </>
