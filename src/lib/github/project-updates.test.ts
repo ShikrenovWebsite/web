@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   githubProjectDifferenceFields,
   githubProjectValues,
+  shouldRefreshSourceDerivedHomepage,
 } from "./project-updates";
 
 const repository = {
@@ -35,5 +36,24 @@ test("keeps synchronized source data separate from portfolio edits", () => {
   assert.equal(
     githubProjectValues(repository).liveUrl,
     "https://calistheni.app",
+  );
+});
+
+test("refreshes source-derived homepages without replacing manual URLs", () => {
+  assert.equal(
+    shouldRefreshSourceDerivedHomepage({
+      projectLiveUrl: "https://oldsite.example",
+      previousHomepageUrl: "https://oldsite.example",
+      incomingHomepageUrl: "https://newsite.example",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRefreshSourceDerivedHomepage({
+      projectLiveUrl: "https://manual.example",
+      previousHomepageUrl: "https://oldsite.example",
+      incomingHomepageUrl: "https://newsite.example",
+    }),
+    false,
   );
 });

@@ -1,10 +1,4 @@
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  GitFork,
-  Link2,
-  Mail,
-} from "lucide-react";
+import { ArrowDownRight, Mail } from "lucide-react";
 
 function TerminalEntry({
   command,
@@ -29,16 +23,12 @@ export function PortfolioHero({
   headline,
   location,
   email,
-  github,
-  linkedin,
 }: {
   fullName: string;
   headline: string;
   introduction: string;
   location: string;
   email?: string;
-  github?: string;
-  linkedin?: string;
 }) {
   return (
     <section className="public-hero" data-portfolio-section id="intro">
@@ -90,22 +80,6 @@ export function PortfolioHero({
               >
                 <span aria-hidden="true">$</span>
                 <i aria-hidden="true" className="terminal-caret" />
-              </div>
-              <div className="hero-terminal-socials">
-                {github ? (
-                  <a href={github} rel="noreferrer" target="_blank">
-                    <GitFork aria-hidden="true" />
-                    GitHub
-                    <ArrowUpRight aria-hidden="true" />
-                  </a>
-                ) : null}
-                {linkedin ? (
-                  <a href={linkedin} rel="noreferrer" target="_blank">
-                    <Link2 aria-hidden="true" />
-                    LinkedIn
-                    <ArrowUpRight aria-hidden="true" />
-                  </a>
-                ) : null}
               </div>
             </div>
             <div className="hero-terminal-actions">

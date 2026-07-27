@@ -13,6 +13,7 @@ import { ProjectList } from "@/components/public/project-list";
 import { PublicSectionHeading } from "@/components/public/section-heading";
 import { SkillGroups } from "@/components/public/skill-groups";
 import { getPublicPortfolio } from "@/lib/public-portfolio";
+import { resolvePublicSocialLinks } from "@/lib/public-social-links";
 
 export const dynamic = "force-dynamic";
 
@@ -33,37 +34,6 @@ function period(start: Date | null, end: Date | null, current = false) {
     .join(" — ");
 }
 
-function safeUrl(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.toString()
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function socialEntries(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-  return Object.entries(value).flatMap(([key, candidate]) => {
-    const url = safeUrl(candidate);
-    return url ? [{ key: key.toLowerCase(), url }] : [];
-  });
-}
-
-function findSocial(
-  entries: Array<{ key: string; url: string }>,
-  service: "github" | "linkedin",
-) {
-  return entries.find(
-    ({ key, url }) =>
-      key.includes(service) ||
-      new URL(url).hostname.toLowerCase().includes(service),
-  )?.url;
-}
-
 function firstSentence(value: string) {
   const match = value.trim().match(/^(.{1,180}?[.!?])(?:\s|$)/);
   return match?.[1] ?? value.trim().slice(0, 180);
@@ -79,16 +49,15 @@ export default async function HomePage() {
   const fullName = profile?.fullName?.trim() || "Portfolio";
   const headline = profile?.professionalTitle?.trim() || "";
   const biography = profile?.biography?.trim() || "";
-  const entries = [
-    ...socialEntries(profile?.socialLinks),
-    ...socialEntries(portfolio?.siteSettings?.socialLinks),
-  ];
-  const socials: PublicSocialLinks = {
-    github: findSocial(entries, "github"),
-    linkedin: findSocial(entries, "linkedin"),
-    website: safeUrl(profile?.websiteUrl),
-    email: portfolio?.siteSettings?.contactEmail ?? profile?.email ?? undefined,
-  };
+  const socials: PublicSocialLinks = resolvePublicSocialLinks({
+    profileSocialLinks: profile?.socialLinks,
+    siteSocialLinks: portfolio?.siteSettings?.socialLinks,
+    websiteUrl: profile?.websiteUrl,
+    projectSourceUrls: (portfolio?.projects ?? []).map(
+      (project) => project.sourceCodeUrl,
+    ),
+    email: portfolio?.siteSettings?.contactEmail ?? profile?.email,
+  });
 
   const experiences: PublicExperience[] = (portfolio?.experiences ?? []).map(
     (item) => ({
@@ -135,10 +104,8 @@ export default async function HomePage() {
         <PortfolioHero
           email={socials.email}
           fullName={fullName}
-          github={socials.github}
           headline={headline}
           introduction={biography ? firstSentence(biography) : ""}
-          linkedin={socials.linkedin}
           location={profile?.location ?? ""}
         />
 

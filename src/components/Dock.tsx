@@ -8,7 +8,6 @@ type DockItemBase = {
   label: string;
   active?: boolean;
   dividerBefore?: boolean;
-  mobileHidden?: boolean;
 };
 
 export type DockItemData =
@@ -67,7 +66,6 @@ export default function Dock({
       {items.map((item) => {
         const classes = [
           "dock-item",
-          item.mobileHidden ? "dock-item--mobile-hidden" : "",
           item.dividerBefore ? "dock-item--divider-before" : "",
         ]
           .filter(Boolean)

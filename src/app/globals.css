@@ -487,8 +487,7 @@ body {
   }
 }
 
-.hero-terminal-actions,
-.hero-terminal-socials {
+.hero-terminal-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -522,27 +521,9 @@ body {
   color: var(--portfolio-accent);
 }
 
-.hero-terminal-actions svg,
-.hero-terminal-socials svg {
+.hero-terminal-actions svg {
   width: 0.85rem;
   height: 0.85rem;
-}
-
-.hero-terminal-socials {
-  margin-top: 0.72rem;
-  color: var(--portfolio-muted);
-  font-family: var(--font-public-mono), ui-monospace, monospace;
-  font-size: 0.62rem;
-}
-
-.hero-terminal-socials a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.hero-terminal-socials a:hover {
-  color: var(--portfolio-accent);
 }
 
 .public-eyebrow,

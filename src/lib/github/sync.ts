@@ -19,6 +19,7 @@ import {
 } from "@/lib/github/enrichment";
 import { decryptGitHubToken } from "@/lib/github/token";
 import { changedRepositoryMetadataFields } from "@/lib/github/metadata";
+import { shouldRefreshSourceDerivedHomepage } from "@/lib/github/project-updates";
 import { refreshSkillSuggestions } from "@/lib/skills/suggestions";
 
 type Snapshot = {
@@ -351,6 +352,11 @@ export async function synchronizeGitHubRepositories(
       client.listAccessiblePublicRepositoriesWithDiagnostics(),
       db.gitHubRepository.findMany({
         where: { connectionId: connection.id },
+        include: {
+          project: {
+            select: { id: true, liveUrl: true },
+          },
+        },
       }),
       db.gitHubOwner.findMany({
         where: { connectionId: connection.id },
@@ -615,7 +621,11 @@ export async function synchronizeGitHubRepositories(
     );
     const seenExternalIds = new Set<string>();
     const prepared: Array<{
-      existing: GitHubRepository | null;
+      existing:
+        | (GitHubRepository & {
+            project: { id: string; liveUrl: string | null } | null;
+          })
+        | null;
       snapshot: Snapshot;
       fieldsChanged: string[];
       unavailableReason: string | null;
@@ -633,6 +643,7 @@ export async function synchronizeGitHubRepositories(
       suggestedLongDescription: string | null;
       suggestedCoverImageUrl: string | null;
       enrichedAt: Date | null;
+      refreshLinkedProjectHomepage: boolean;
     }> = [];
 
     for (const source of sourceRepositories) {
@@ -841,6 +852,14 @@ export async function synchronizeGitHubRepositories(
         suggestedLongDescription,
         suggestedCoverImageUrl,
         enrichedAt,
+        refreshLinkedProjectHomepage: Boolean(
+          existing?.project &&
+            shouldRefreshSourceDerivedHomepage({
+              projectLiveUrl: existing.project.liveUrl,
+              previousHomepageUrl: previous?.homepageUrl,
+              incomingHomepageUrl: snapshot.homepageUrl,
+            }),
+        ),
       });
     }
 
@@ -1036,6 +1055,13 @@ export async function synchronizeGitHubRepositories(
             sourceSnapshot: snapshot,
           },
         });
+
+        if (item.refreshLinkedProjectHomepage && item.existing?.project) {
+          await transaction.portfolioProject.update({
+            where: { id: item.existing.project.id },
+            data: { liveUrl: snapshot.homepageUrl },
+          });
+        }
 
         await transaction.gitHubSyncItem.create({
           data: {

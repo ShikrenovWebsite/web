@@ -69,3 +69,15 @@ export function githubProjectDifferenceFields(
       JSON.stringify(project[field]) !== JSON.stringify(incoming[field]),
   );
 }
+
+export function shouldRefreshSourceDerivedHomepage(input: {
+  projectLiveUrl: string | null;
+  previousHomepageUrl: string | null | undefined;
+  incomingHomepageUrl: string | null;
+}) {
+  return (
+    input.previousHomepageUrl !== undefined &&
+    input.previousHomepageUrl !== input.incomingHomepageUrl &&
+    input.projectLiveUrl === input.previousHomepageUrl
+  );
+}

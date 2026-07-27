@@ -112,8 +112,8 @@
   }
 
   .dock-item {
-    width: 2rem;
-    height: 2rem;
+    width: 1.85rem;
+    height: 1.85rem;
     border-radius: 0.55rem;
   }
 
@@ -126,20 +126,23 @@
     height: 1.2rem;
   }
 
-  .dock-item--mobile-hidden {
-    display: none;
-  }
-
   .dock-icon,
   .dock-icon svg {
-    width: 0.9rem;
-    height: 0.9rem;
+    width: 0.85rem;
+    height: 0.85rem;
   }
 
   .dock-item:hover .dock-icon,
   .dock-item:focus-visible .dock-icon,
   .dock-item[aria-current="location"] .dock-icon {
     transform: scale(1.08);
+  }
+}
+
+@media (max-width: 22rem) {
+  .dock-item {
+    width: 1.65rem;
+    height: 1.65rem;
   }
 }
 

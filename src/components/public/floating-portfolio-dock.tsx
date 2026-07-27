@@ -11,19 +11,18 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { FaLinkedin } from "react-icons/fa";
 import { SiGithub } from "react-icons/si";
-import { FaLinkedinIn } from "react-icons/fa6";
 import Dock, { type DockItemData } from "@/components/Dock";
 import type { PublicSocialLinks } from "./portfolio-types";
 
 const sections = [
   { id: "intro", label: "Intro", icon: House },
-  { id: "about", label: "About", icon: UserRound, mobileHidden: true },
+  { id: "about", label: "About", icon: UserRound },
   {
     id: "experience",
     label: "Experience",
     icon: BriefcaseBusiness,
-    mobileHidden: true,
   },
   { id: "projects", label: "Projects", icon: FolderGit2 },
   { id: "skills", label: "Skills", icon: Sparkles },
@@ -76,11 +75,10 @@ export function FloatingPortfolioDock({
   const active = useActiveSection();
   const dockItems = useMemo<DockItemData[]>(() => {
     const navigation: DockItemData[] = sections.map(
-      ({ id, label, icon: Icon, ...section }) => ({
+      ({ id, label, icon: Icon }) => ({
         kind: "action",
         label,
         active: active === id,
-        mobileHidden: "mobileHidden" in section && section.mobileHidden,
         icon: <Icon />,
         onClick: () => scrollToSection(id),
       }),
@@ -103,7 +101,7 @@ export function FloatingPortfolioDock({
         label: "LinkedIn",
         href: socials.linkedin,
         external: true,
-        icon: <FaLinkedinIn />,
+        icon: <FaLinkedin />,
       });
     }
     if (socials.email) {
