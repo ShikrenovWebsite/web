@@ -16,6 +16,22 @@ const urlText = z
   .refine((value) => value === "" || z.url().safeParse(value).success, {
     message: "Enter a valid URL including https://.",
   });
+const linkedinUrlText = z
+  .string()
+  .trim()
+  .refine((value) => {
+    if (value === "") return true;
+    try {
+      const url = new URL(value);
+      const hostname = url.hostname.toLowerCase();
+      return (
+        url.protocol === "https:" &&
+        (hostname === "linkedin.com" || hostname === "www.linkedin.com")
+      );
+    } catch {
+      return false;
+    }
+  }, "Enter a valid LinkedIn URL beginning with https://.");
 
 export const profileSchema = z.object({
   fullName: optionalText(120),
@@ -30,6 +46,7 @@ export const profileSchema = z.object({
   phone: optionalText(50),
   location: optionalText(160),
   websiteUrl: urlText,
+  linkedinUrl: linkedinUrlText,
   status: publicationStatusSchema,
   displayOrder: z.number().int().min(0).max(100000),
 });

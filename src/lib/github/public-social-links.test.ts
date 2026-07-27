@@ -16,12 +16,12 @@ test("resolves flat and nested published social-link formats", () => {
     email: "hello@example.com",
   });
 
-  assert.equal(links.github, "https://github.com/example");
-  assert.equal(links.linkedin, "https://linkedin.com/in/example");
+  assert.equal(links.githubUrl, "https://github.com/example");
+  assert.equal(links.linkedinUrl, "https://linkedin.com/in/example");
   assert.equal(links.email, "hello@example.com");
 });
 
-test("derives a GitHub profile only from published project source URLs", () => {
+test("uses canonical owner fallbacks instead of repository organization URLs", () => {
   const links = resolvePublicSocialLinks({
     profileSocialLinks: null,
     siteSocialLinks: null,
@@ -30,6 +30,9 @@ test("derives a GitHub profile only from published project source URLs", () => {
     email: null,
   });
 
-  assert.equal(links.github, "https://github.com/Calistheni");
-  assert.equal(links.linkedin, undefined);
+  assert.equal(links.githubUrl, "https://github.com/Shikrenov");
+  assert.equal(
+    links.linkedinUrl,
+    "https://www.linkedin.com/in/peter-shikrenov-b283a7271/",
+  );
 });

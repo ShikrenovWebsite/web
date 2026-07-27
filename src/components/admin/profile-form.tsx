@@ -140,6 +140,20 @@ export function ProfileForm({
                 {...form.register("websiteUrl")}
               />
             </FormField>
+            <FormField
+              className="sm:col-span-2"
+              error={form.formState.errors.linkedinUrl?.message}
+              hint="Leave blank to omit LinkedIn from the public navigation."
+              id="linkedinUrl"
+              label="LinkedIn URL"
+            >
+              <Input
+                id="linkedinUrl"
+                placeholder="https://www.linkedin.com/in/username"
+                type="url"
+                {...form.register("linkedinUrl")}
+              />
+            </FormField>
             <FormField id="profileStatus" label="Publication status">
               <Controller
                 control={form.control}

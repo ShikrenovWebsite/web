@@ -1,4 +1,5 @@
 import { AtSign, Globe2, MapPin, Phone } from "lucide-react";
+import { FaLinkedin } from "react-icons/fa";
 import { ContentActions } from "@/components/admin/content-actions";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ProfileForm } from "@/components/admin/profile-form";
@@ -14,6 +15,7 @@ import {
 import { requireAdminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { statusBadgeClass, statusLabel } from "@/lib/status";
+import { readLinkedInUrl } from "@/lib/public-social-links";
 
 export const metadata = { title: "Profile" };
 
@@ -25,6 +27,7 @@ const emptyProfile = {
   phone: "",
   location: "",
   websiteUrl: "",
+  linkedinUrl: "",
   status: "DRAFT" as const,
   displayOrder: 0,
 };
@@ -59,9 +62,11 @@ export default async function ProfilePage() {
     phone: profile.phone ?? "",
     location: profile.location ?? "",
     websiteUrl: profile.websiteUrl ?? "",
+    linkedinUrl: readLinkedInUrl(profile.socialLinks) ?? "",
     status: profile.status,
     displayOrder: profile.displayOrder,
   };
+  const linkedinUrl = readLinkedInUrl(profile.socialLinks);
 
   return (
     <div className="space-y-6">
@@ -124,6 +129,26 @@ export default async function ProfilePage() {
                 <span className="truncate">{profile.websiteUrl}</span>
               </div>
             ) : null}
+            <div className="flex items-center gap-2">
+              <FaLinkedin
+                aria-hidden="true"
+                className="size-4 text-muted-foreground"
+              />
+              {linkedinUrl ? (
+                <a
+                  className="truncate underline-offset-4 hover:underline"
+                  href={linkedinUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {linkedinUrl}
+                </a>
+              ) : (
+                <span className="text-muted-foreground">
+                  LinkedIn not configured
+                </span>
+              )}
+            </div>
           </dl>
         </CardContent>
       </Card>

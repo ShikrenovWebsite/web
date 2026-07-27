@@ -3,6 +3,12 @@ type SocialEntry = {
   url: string;
 };
 
+export const DEFAULT_GITHUB_URL = "https://github.com/Shikrenov";
+export const DEFAULT_LINKEDIN_URL =
+  "https://www.linkedin.com/in/peter-shikrenov-b283a7271/";
+
+const LINKEDIN_KEYS = ["linkedinUrl", "linkedInUrl", "linkedin", "linkedIn"];
+
 function safePublicUrl(value: unknown) {
   if (typeof value !== "string") return undefined;
   try {
@@ -13,6 +19,74 @@ function safePublicUrl(value: unknown) {
   } catch {
     return undefined;
   }
+}
+
+export function normalizeGitHubUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+
+  try {
+    const url = new URL(value.trim());
+    const hostname = url.hostname.toLowerCase();
+    if (
+      url.protocol !== "https:" ||
+      (hostname !== "github.com" && hostname !== "www.github.com")
+    ) {
+      return undefined;
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return undefined;
+  }
+}
+
+export function normalizeLinkedInUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+
+  try {
+    const url = new URL(value.trim());
+    const hostname = url.hostname.toLowerCase();
+    if (
+      url.protocol !== "https:" ||
+      (hostname !== "linkedin.com" && hostname !== "www.linkedin.com")
+    ) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+export function readLinkedInUrl(value: unknown) {
+  if (value && !Array.isArray(value) && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of LINKEDIN_KEYS) {
+      const normalized = normalizeLinkedInUrl(record[key]);
+      if (normalized) return normalized;
+    }
+  }
+
+  return normalizeLinkedInUrl(
+    findSocial(collectSocialEntries(value), "linkedin"),
+  );
+}
+
+export function updateLinkedInSocialLinks(
+  value: unknown,
+  linkedinUrl: string,
+) {
+  const next: Record<string, unknown> =
+    value && !Array.isArray(value) && typeof value === "object"
+      ? { ...(value as Record<string, unknown>) }
+      : value
+        ? { links: value }
+        : {};
+
+  LINKEDIN_KEYS.forEach((key) => delete next[key]);
+  const normalized = normalizeLinkedInUrl(linkedinUrl);
+  if (normalized) next.linkedinUrl = normalized;
+
+  return Object.keys(next).length ? next : null;
 }
 
 function collectSocialEntries(
@@ -35,6 +109,14 @@ function collectSocialEntries(
   }
 
   const record = value as Record<string, unknown>;
+  if (
+    record.visible === false ||
+    record.isVisible === false ||
+    record.published === false ||
+    record.enabled === false
+  ) {
+    return entries;
+  }
   const label = ["platform", "service", "type", "name"].find(
     (field) => typeof record[field] === "string",
   );
@@ -63,18 +145,6 @@ function findSocial(entries: SocialEntry[], service: "github" | "linkedin") {
   })?.url;
 }
 
-function githubProfileFromPublishedProjects(sourceCodeUrls: unknown[]) {
-  for (const candidate of sourceCodeUrls) {
-    const sourceUrl = safePublicUrl(candidate);
-    if (!sourceUrl) continue;
-    const url = new URL(sourceUrl);
-    if (!/(^|\.)github\.com$/i.test(url.hostname)) continue;
-    const [owner, repository] = url.pathname.split("/").filter(Boolean);
-    if (owner && repository) return `${url.origin}/${owner}`;
-  }
-  return undefined;
-}
-
 export function resolvePublicSocialLinks(input: {
   profileSocialLinks: unknown;
   siteSocialLinks: unknown;
@@ -90,11 +160,14 @@ export function resolvePublicSocialLinks(input: {
   if (website) entries.push({ key: "profile.website", url: website });
 
   return {
-    github:
-      findSocial(entries, "github") ??
-      githubProfileFromPublishedProjects(input.projectSourceUrls),
-    linkedin: findSocial(entries, "linkedin"),
-    website,
+    githubUrl:
+      normalizeGitHubUrl(findSocial(entries, "github")) ??
+      DEFAULT_GITHUB_URL,
+    linkedinUrl:
+      readLinkedInUrl(input.profileSocialLinks) ??
+      readLinkedInUrl(input.siteSocialLinks) ??
+      DEFAULT_LINKEDIN_URL,
+    websiteUrl: website,
     email: input.email?.trim() || undefined,
   };
 }

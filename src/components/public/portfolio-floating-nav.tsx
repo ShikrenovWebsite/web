@@ -9,10 +9,14 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
-import { FaLinkedin } from "react-icons/fa";
-import { SiGithub } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -21,6 +25,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  buildPublicSocialNavigationItems,
+  getPublicSocialAnchorProps,
+  isDocumentAtBottom,
+  type PublicSectionId,
+  type PublicSocialNavigationItem,
+  publicSectionIds,
+  publicSocialBrandIconAssets,
+  selectActivePublicSection,
+} from "@/lib/public-navigation";
 import { cn } from "@/lib/utils";
 
 const sections = [
@@ -33,35 +47,102 @@ const sections = [
 ] as const;
 
 function useActiveSection() {
-  const [activeSection, setActiveSection] = useState("intro");
+  const [activeSection, setActiveSection] =
+    useState<PublicSectionId>("intro");
+  const activeSectionRef = useRef<PublicSectionId>("intro");
+  const requestedSectionRef = useRef<PublicSectionId | null>(null);
 
   useEffect(() => {
-    const targets = sections.flatMap(({ id }) => {
+    const targets = publicSectionIds.flatMap((id) => {
       const element = document.getElementById(id);
-      return element ? [element] : [];
+      return element ? [{ id, element }] : [];
     });
-    const ratios = new Map<Element, number>();
+    const ratios = new Map<PublicSectionId, number>();
+    let frame = 0;
+    let lastScrollY = window.scrollY;
+    let scrollingDown = true;
+
+    const commitActiveSection = (id: PublicSectionId) => {
+      activeSectionRef.current = id;
+      setActiveSection((current) => (current === id ? current : id));
+    };
+
+    const updateActiveSection = () => {
+      const nextScrollY = window.scrollY;
+      scrollingDown = nextScrollY >= lastScrollY;
+      lastScrollY = nextScrollY;
+
+      const atBottom = isDocumentAtBottom({
+        innerHeight: window.innerHeight,
+        scrollY: nextScrollY,
+        scrollHeight: document.documentElement.scrollHeight,
+      });
+      if (atBottom) {
+        requestedSectionRef.current = null;
+        commitActiveSection("education");
+        return;
+      }
+
+      const requested = requestedSectionRef.current;
+      if (requested) {
+        commitActiveSection(requested);
+        if ((ratios.get(requested) ?? 0) > 0) {
+          requestedSectionRef.current = null;
+        }
+        return;
+      }
+
+      commitActiveSection(
+        selectActivePublicSection({
+          ratios,
+          atBottom,
+          scrollingDown,
+          current: activeSectionRef.current,
+        }),
+      );
+    };
+
+    const scheduleUpdate = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        updateActiveSection();
+      });
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           ratios.set(
-            entry.target,
+            entry.target.id as PublicSectionId,
             entry.isIntersecting ? entry.intersectionRatio : 0,
           );
         });
-        const mostVisible = targets
-          .map((target) => ({ target, ratio: ratios.get(target) ?? 0 }))
-          .sort((left, right) => right.ratio - left.ratio)[0];
-        if (mostVisible?.ratio) setActiveSection(mostVisible.target.id);
+        scheduleUpdate();
       },
       { rootMargin: "-35% 0px -55% 0px", threshold: [0, 0.1, 0.25, 0.5] },
     );
 
-    targets.forEach((target) => observer.observe(target));
-    return () => observer.disconnect();
+    targets.forEach(({ element }) => observer.observe(element));
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
   }, []);
 
-  return { activeSection, setActiveSection };
+  const activateSection = (id: PublicSectionId) => {
+    requestedSectionRef.current = id;
+    activeSectionRef.current = id;
+    setActiveSection(id);
+  };
+
+  return { activeSection, activateSection };
 }
 
 function scrollToSection(id: string) {
@@ -88,6 +169,44 @@ function ItemTooltip({
   );
 }
 
+export function PortfolioSocialAction({
+  item,
+}: {
+  item: PublicSocialNavigationItem;
+}) {
+  const brandIcon =
+    item.label === "Email"
+      ? undefined
+      : publicSocialBrandIconAssets[item.label];
+
+  return (
+    <Button
+      asChild
+      className="portfolio-floating-nav-item"
+      size="icon"
+      variant="ghost"
+    >
+      <a {...getPublicSocialAnchorProps(item)}>
+        {brandIcon ? (
+          <Image
+            alt=""
+            aria-hidden="true"
+            className={cn(
+              "portfolio-floating-nav-brand-icon",
+              item.label === "GitHub" && "is-github",
+            )}
+            height={20}
+            src={brandIcon}
+            width={20}
+          />
+        ) : (
+          <Mail aria-hidden="true" />
+        )}
+      </a>
+    </Button>
+  );
+}
+
 export type PortfolioFloatingNavProps = {
   githubUrl?: string | null;
   linkedinUrl?: string | null;
@@ -104,8 +223,12 @@ export function PortfolioFloatingNav({
     () => true,
     () => false,
   );
-  const { activeSection, setActiveSection } = useActiveSection();
-  const hasSocials = Boolean(githubUrl || linkedinUrl || email);
+  const { activeSection, activateSection } = useActiveSection();
+  const socialItems = buildPublicSocialNavigationItems({
+    githubUrl,
+    linkedinUrl,
+    email,
+  });
 
   if (!mounted) return null;
 
@@ -128,7 +251,7 @@ export function PortfolioFloatingNav({
                     active && "is-active",
                   )}
                   onClick={() => {
-                    setActiveSection(id);
+                    activateSection(id);
                     scrollToSection(id);
                   }}
                   size="icon"
@@ -141,67 +264,18 @@ export function PortfolioFloatingNav({
             );
           })}
 
-          {hasSocials ? (
+          {socialItems.length ? (
             <Separator
               className="portfolio-floating-nav-separator"
               orientation="vertical"
             />
           ) : null}
 
-          {githubUrl ? (
-            <ItemTooltip label="GitHub">
-              <Button
-                asChild
-                className="portfolio-floating-nav-item"
-                size="icon"
-                variant="ghost"
-              >
-                <a
-                  aria-label="GitHub"
-                  href={githubUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <SiGithub aria-hidden="true" />
-                </a>
-              </Button>
+          {socialItems.map((item) => (
+            <ItemTooltip key={item.label} label={item.label}>
+              <PortfolioSocialAction item={item} />
             </ItemTooltip>
-          ) : null}
-
-          {linkedinUrl ? (
-            <ItemTooltip label="LinkedIn">
-              <Button
-                asChild
-                className="portfolio-floating-nav-item"
-                size="icon"
-                variant="ghost"
-              >
-                <a
-                  aria-label="LinkedIn"
-                  href={linkedinUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <FaLinkedin aria-hidden="true" />
-                </a>
-              </Button>
-            </ItemTooltip>
-          ) : null}
-
-          {email ? (
-            <ItemTooltip label="Email">
-              <Button
-                asChild
-                className="portfolio-floating-nav-item"
-                size="icon"
-                variant="ghost"
-              >
-                <a aria-label="Email" href={`mailto:${email}`}>
-                  <Mail aria-hidden="true" />
-                </a>
-              </Button>
-            </ItemTooltip>
-          ) : null}
+          ))}
         </nav>
       </TooltipProvider>
     </div>,

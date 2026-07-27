@@ -1403,6 +1403,34 @@ body {
   height: 1.1rem;
 }
 
+.portfolio-floating-nav-brand-icon {
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: none;
+  object-fit: contain;
+  opacity: 0.82;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.portfolio-floating-nav-brand-icon.is-github {
+  filter: invert(1);
+}
+
+.portfolio-floating-nav-item:hover .portfolio-floating-nav-brand-icon,
+.portfolio-floating-nav-item:focus-visible .portfolio-floating-nav-brand-icon {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px rgb(50 215 22 / 0.34));
+}
+
+.portfolio-floating-nav-item:hover .portfolio-floating-nav-brand-icon.is-github,
+.portfolio-floating-nav-item:focus-visible
+  .portfolio-floating-nav-brand-icon.is-github {
+  filter: invert(1) drop-shadow(0 0 5px rgb(50 215 22 / 0.34));
+}
+
 .portfolio-floating-nav-separator {
   width: 1px;
   height: 1.5rem;
@@ -1646,6 +1674,11 @@ body {
   .portfolio-floating-nav-item svg {
     width: 0.9rem;
     height: 0.9rem;
+  }
+
+  .portfolio-floating-nav-brand-icon {
+    width: 1.05rem;
+    height: 1.05rem;
   }
 
   .portfolio-floating-nav-separator {

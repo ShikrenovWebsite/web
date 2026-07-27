@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAdminPage } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { updateLinkedInSocialLinks } from "@/lib/public-social-links";
 import {
   deleteOwnedContentRecord,
   pruneDeletedRecordFromPublication,
@@ -93,8 +94,15 @@ export async function saveProfile(input: unknown): Promise<ActionResult> {
     const data = parsed.data;
     const existing = await db.portfolioProfile.findUnique({
       where: { userId: admin.id },
-      select: { publishedAt: true },
+      select: { publishedAt: true, socialLinks: true },
     });
+    const updatedSocialLinks = updateLinkedInSocialLinks(
+      existing?.socialLinks,
+      data.linkedinUrl,
+    );
+    const socialLinks = updatedSocialLinks
+      ? (updatedSocialLinks as Prisma.InputJsonObject)
+      : Prisma.JsonNull;
 
     await db.portfolioProfile.upsert({
       where: { userId: admin.id },
@@ -106,6 +114,7 @@ export async function saveProfile(input: unknown): Promise<ActionResult> {
         phone: optional(data.phone),
         location: optional(data.location),
         websiteUrl: optional(data.websiteUrl),
+        socialLinks,
         status: data.status,
         displayOrder: data.displayOrder,
         publishedAt: publicationDate(data.status, existing?.publishedAt),
@@ -119,6 +128,7 @@ export async function saveProfile(input: unknown): Promise<ActionResult> {
         phone: optional(data.phone),
         location: optional(data.location),
         websiteUrl: optional(data.websiteUrl),
+        socialLinks,
         status: data.status,
         displayOrder: data.displayOrder,
         publishedAt: publicationDate(data.status),

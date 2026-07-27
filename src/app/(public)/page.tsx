@@ -219,8 +219,8 @@ export default async function HomePage() {
       </div>
       <PortfolioFloatingNav
         email={socials.email}
-        githubUrl={socials.github}
-        linkedinUrl={socials.linkedin}
+        githubUrl={socials.githubUrl}
+        linkedinUrl={socials.linkedinUrl}
       />
     </>
   );

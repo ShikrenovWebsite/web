@@ -38,8 +38,8 @@ export type PublicSkill = {
 };
 
 export type PublicSocialLinks = {
-  github?: string;
-  linkedin?: string;
-  website?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
+  websiteUrl?: string;
   email?: string;
 };
