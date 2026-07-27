@@ -86,6 +86,7 @@ export function FloatingPortfolioDock({
     if (socials.github) {
       socialItems.push({
         kind: "link",
+        dividerBefore: socialItems.length === 0,
         label: "GitHub",
         href: socials.github,
         external: true,
@@ -95,6 +96,7 @@ export function FloatingPortfolioDock({
     if (socials.linkedin) {
       socialItems.push({
         kind: "link",
+        dividerBefore: socialItems.length === 0,
         label: "LinkedIn",
         href: socials.linkedin,
         external: true,
@@ -104,6 +106,7 @@ export function FloatingPortfolioDock({
     if (socials.email) {
       socialItems.push({
         kind: "link",
+        dividerBefore: socialItems.length === 0,
         label: "Email",
         href: `mailto:${socials.email}`,
         icon: <Mail />,

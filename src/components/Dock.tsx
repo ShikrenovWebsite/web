@@ -7,6 +7,7 @@ type DockItemBase = {
   icon: ReactNode;
   label: string;
   active?: boolean;
+  dividerBefore?: boolean;
   mobileHidden?: boolean;
 };
 
@@ -64,7 +65,13 @@ export default function Dock({
       style={style}
     >
       {items.map((item) => {
-        const classes = `dock-item ${item.mobileHidden ? "dock-item--mobile-hidden" : ""}`;
+        const classes = [
+          "dock-item",
+          item.mobileHidden ? "dock-item--mobile-hidden" : "",
+          item.dividerBefore ? "dock-item--divider-before" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
         if (item.kind === "link") {
           return (
             <a

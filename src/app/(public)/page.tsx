@@ -12,7 +12,6 @@ import type {
 import { ProjectList } from "@/components/public/project-list";
 import { PublicSectionHeading } from "@/components/public/section-heading";
 import { SkillGroups } from "@/components/public/skill-groups";
-import MagnetLines from "@/components/MagnetLines";
 import { getPublicPortfolio } from "@/lib/public-portfolio";
 
 export const dynamic = "force-dynamic";
@@ -249,24 +248,6 @@ export default async function HomePage() {
               <CompactEmpty>No education is published.</CompactEmpty>
             )}
           </div>
-        </section>
-
-        <section className="public-connect" id="connect">
-          <div className="public-connect-visual">
-            <MagnetLines
-              baseAngle={-12}
-              columns={18}
-              containerSize="100%"
-              lineColor="#32d716"
-              lineHeight="clamp(1.1rem, 2vw, 1.85rem)"
-              lineWidth="2px"
-              rows={9}
-            />
-          </div>
-          <div aria-hidden="true" className="public-connect-scrim" />
-          <span aria-hidden="true" className="public-connect-label">
-            signal.open()
-          </span>
         </section>
       </div>
       <FloatingPortfolioDock socials={socials} />

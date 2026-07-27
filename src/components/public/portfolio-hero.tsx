@@ -52,65 +52,74 @@ export function PortfolioHero({
           <span>portfolio-terminal</span>
         </header>
         <div className="hero-terminal-body">
-          <dl>
-            <TerminalEntry command="whoami">
-              <strong className="terminal-person-name public-display">
-                {fullName}
-              </strong>
-            </TerminalEntry>
-            <TerminalEntry command="role">
-              {headline || "Product-minded software engineer"}
-            </TerminalEntry>
-            <TerminalEntry command="location">
-              {location || "Sofia, Bulgaria"}
-            </TerminalEntry>
-            <TerminalEntry command="status">
-              <span className="terminal-status">
-                <i aria-hidden="true" />
-                Available for selected work
-              </span>
-            </TerminalEntry>
-          </dl>
-          <div
-            aria-label="Terminal ready for the next command"
-            className="terminal-ready-prompt"
-            role="status"
-          >
-            <span aria-hidden="true">$</span>
-            <i aria-hidden="true" className="terminal-caret" />
-          </div>
-          <div className="hero-terminal-actions">
-            <a href="#projects">
-              Selected work
-              <ArrowDownRight aria-hidden="true" />
-            </a>
-            {email ? (
-              <>
+          <div className="hero-terminal-workspace">
+            <div className="hero-terminal-command-column">
+              <dl>
+                <TerminalEntry command="whoami">
+                  <strong className="terminal-person-name public-display">
+                    {fullName}
+                  </strong>
+                </TerminalEntry>
+                <TerminalEntry command="role">
+                  {headline || "Product-minded software engineer"}
+                </TerminalEntry>
+                <TerminalEntry command="location">
+                  {location || "Sofia, Bulgaria"}
+                </TerminalEntry>
+                <TerminalEntry command="status">
+                  <span className="terminal-status">
+                    <i aria-hidden="true" />
+                    Available for selected work
+                  </span>
+                </TerminalEntry>
+                {email ? (
+                  <TerminalEntry command="contact">
+                    <a
+                      className="terminal-contact-link"
+                      href={`mailto:${email}`}
+                    >
+                      {email}
+                    </a>
+                  </TerminalEntry>
+                ) : null}
+              </dl>
+              <div
+                aria-label="Terminal ready for the next command"
+                className="terminal-ready-prompt"
+                role="status"
+              >
+                <span aria-hidden="true">$</span>
+                <i aria-hidden="true" className="terminal-caret" />
+              </div>
+              <div className="hero-terminal-socials">
+                {github ? (
+                  <a href={github} rel="noreferrer" target="_blank">
+                    <GitFork aria-hidden="true" />
+                    GitHub
+                    <ArrowUpRight aria-hidden="true" />
+                  </a>
+                ) : null}
+                {linkedin ? (
+                  <a href={linkedin} rel="noreferrer" target="_blank">
+                    <Link2 aria-hidden="true" />
+                    LinkedIn
+                    <ArrowUpRight aria-hidden="true" />
+                  </a>
+                ) : null}
+              </div>
+            </div>
+            <div className="hero-terminal-actions">
+              <a href="#projects">
+                Selected work
+                <ArrowDownRight aria-hidden="true" />
+              </a>
+              {email ? (
                 <a href={`mailto:${email}`}>
                   <Mail aria-hidden="true" />
                   Start a conversation
                 </a>
-                <a className="hero-terminal-email" href={`mailto:${email}`}>
-                  {email}
-                </a>
-              </>
-            ) : null}
-          </div>
-          <div className="hero-terminal-socials">
-            {github ? (
-              <a href={github} rel="noreferrer" target="_blank">
-                <GitFork aria-hidden="true" />
-                GitHub
-                <ArrowUpRight aria-hidden="true" />
-              </a>
-            ) : null}
-            {linkedin ? (
-              <a href={linkedin} rel="noreferrer" target="_blank">
-                <Link2 aria-hidden="true" />
-                LinkedIn
-                <ArrowUpRight aria-hidden="true" />
-              </a>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
