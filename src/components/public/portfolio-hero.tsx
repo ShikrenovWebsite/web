@@ -99,7 +99,6 @@ export function PortfolioHero({
                 href="#projects"
               >
                 Selected work
-                <ArrowDownRight aria-hidden="true" />
               </a>
 
               {email ? (
