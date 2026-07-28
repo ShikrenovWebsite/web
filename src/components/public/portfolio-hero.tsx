@@ -8,12 +8,12 @@ function TerminalEntry({
   children: React.ReactNode;
 }) {
   return (
-    <div className="terminal-entry mb-12">
+    <div className="terminal-entry mb-8 md:mb-10">
       <dt className="!text-lg font-semibold text-green-500 md:!text-xl">
         <span aria-hidden="true">$</span> <code>{command}</code>
       </dt>
 
-      <dd className="mt-4 !text-3xl leading-relaxed text-white md:!text-4xl">
+      <dd className="mt-3 !text-3xl leading-[1.3] text-white md:!text-4xl">
         {children}
       </dd>
     </div>
@@ -48,25 +48,21 @@ export function PortfolioHero({
             <div className="hero-terminal-command-column w-full max-w-5xl">
               <dl>
                 <TerminalEntry command="whoami">
-                  <strong className="terminal-person-name public-display block !text-7xl font-bold leading-none tracking-tight md:!text-9xl">
+                  <strong className="terminal-person-name public-display block !text-5xl font-bold leading-none tracking-tight md:!text-7xl">
                     {fullName}
                   </strong>
                 </TerminalEntry>
 
                 <TerminalEntry command="role">
-                  <span className="!text-3xl md:!text-4xl">
-                    {headline || "Product-minded software engineer"}
-                  </span>
+                  <span>{headline || "Product-minded software engineer"}</span>
                 </TerminalEntry>
 
                 <TerminalEntry command="location">
-                  <span className="!text-3xl md:!text-4xl">
-                    {location || "Sofia, Bulgaria"}
-                  </span>
+                  <span>{location || "Sofia, Bulgaria"}</span>
                 </TerminalEntry>
 
                 <TerminalEntry command="status">
-                  <span className="terminal-status !text-3xl md:!text-4xl">
+                  <span className="terminal-status">
                     Available for selected work
                   </span>
                 </TerminalEntry>
@@ -74,7 +70,7 @@ export function PortfolioHero({
                 {email ? (
                   <TerminalEntry command="contact">
                     <a
-                      className="terminal-contact-link !text-3xl md:!text-4xl"
+                      className="terminal-contact-link"
                       href={`mailto:${email}`}
                     >
                       {email}
@@ -85,7 +81,7 @@ export function PortfolioHero({
 
               <div
                 aria-label="Terminal ready for the next command"
-                className="terminal-ready-prompt mt-12 !text-3xl md:!text-4xl"
+                className="terminal-ready-prompt mt-10 !text-2xl md:!text-3xl"
                 role="status"
               >
                 <span aria-hidden="true">$</span>
@@ -94,16 +90,23 @@ export function PortfolioHero({
             </div>
 
             <div className="hero-terminal-actions">
-              <span className="terminal-actions-prompt">$ actions</span>
+              <span className="terminal-actions-prompt !text-lg md:!text-xl">
+                $ actions
+              </span>
 
-              <a href="#projects">
+              <a
+                className="!min-h-14 !px-5 !text-xl md:!text-2xl"
+                href="#projects"
+              >
                 Selected work
                 <ArrowDownRight aria-hidden="true" />
               </a>
 
               {email ? (
-                <a href={`mailto:${email}`}>
-                  <Mail aria-hidden="true" />
+                <a
+                  className="!min-h-14 !px-5 !text-xl md:!text-2xl"
+                  href={`mailto:${email}`}
+                >
                   Start a conversation
                 </a>
               ) : null}
