@@ -3,6 +3,9 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PortfolioSocialAction } from "../../components/public/portfolio-floating-nav";
+import { ExperienceList } from "../../components/public/experience-list";
+import { PortfolioHero } from "../../components/public/portfolio-hero";
+import { PublicHeader } from "../../components/public/public-header";
 import {
   buildPublicSocialNavigationItems,
   getPublicSocialAnchorProps,
@@ -31,6 +34,48 @@ const validProfile = {
   status: "PUBLISHED" as const,
   displayOrder: 0,
 };
+
+test("public UI shows Download CV in the terminal without an admin link", () => {
+  const hero = renderToStaticMarkup(
+    createElement(PortfolioHero, {
+      fullName: "Petar Shikrenov",
+      headline: "Engineer",
+      introduction: "",
+      location: "Sofia",
+      email: "petar@example.com",
+      cvAvailable: true,
+    }),
+  );
+  const header = renderToStaticMarkup(createElement(PublicHeader));
+  assert.match(hero, /Download CV/);
+  assert.match(hero, /href="\/api\/cv\/download"/);
+  assert.doesNotMatch(hero, /href="\/admin"/);
+  assert.doesNotMatch(header, /href="\/admin"/);
+});
+
+test("experience layout promotes one entry and keeps multiple entries in the grid", () => {
+  const item = {
+    id: "experience-1",
+    company: "Example Studio",
+    role: "Software Engineer",
+    meta: "2024 — Present",
+    current: true,
+    description: "Built dependable product experiences.",
+    highlights: [],
+  };
+
+  const single = renderToStaticMarkup(
+    createElement(ExperienceList, { items: [item] }),
+  );
+  const multiple = renderToStaticMarkup(
+    createElement(ExperienceList, { items: [item, { ...item, id: "experience-2" }] }),
+  );
+
+  assert.match(single, /experience-editorial--single/);
+  assert.doesNotMatch(single, /experience-editorial--multiple/);
+  assert.match(multiple, /experience-editorial--multiple/);
+  assert.doesNotMatch(multiple, /experience-editorial--single/);
+});
 
 test("profile validation accepts empty and valid LinkedIn URLs", () => {
   assert.equal(profileSchema.safeParse(validProfile).success, true);

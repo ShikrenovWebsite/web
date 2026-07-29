@@ -14,6 +14,7 @@ import { PublicSectionHeading } from "@/components/public/section-heading";
 import { SkillGroups } from "@/components/public/skill-groups";
 import { getPublicPortfolio } from "@/lib/public-portfolio";
 import { resolvePublicSocialLinks } from "@/lib/public-social-links";
+import { hasPublicCvDownload } from "@/lib/cv/public-download";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,10 @@ function CompactEmpty({ children }: { children: string }) {
 }
 
 export default async function HomePage() {
-  const portfolio = await getPublicPortfolio();
+  const [portfolio, cvAvailable] = await Promise.all([
+    getPublicPortfolio(),
+    hasPublicCvDownload(),
+  ]);
   const profile = portfolio?.profile;
   const fullName = profile?.fullName?.trim() || "Portfolio";
   const headline = profile?.professionalTitle?.trim() || "";
@@ -107,6 +111,7 @@ export default async function HomePage() {
           headline={headline}
           introduction={biography ? firstSentence(biography) : ""}
           location={profile?.location ?? ""}
+          cvAvailable={cvAvailable}
         />
 
         <section
@@ -153,7 +158,6 @@ export default async function HomePage() {
         >
           <div className="public-section-intro">
             <PublicSectionHeading index="02" title="Experience" />
-            <p>Selected chapters from the work behind the products.</p>
           </div>
           <div>
             {experiences.length ? (

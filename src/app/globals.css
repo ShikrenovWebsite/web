@@ -292,24 +292,6 @@ body {
   box-shadow: 0 0 12px var(--portfolio-accent-glow);
 }
 
-.public-admin-link {
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-  gap: 0.35rem;
-  color: var(--portfolio-muted);
-  font-size: 0.72rem;
-}
-
-.public-admin-link:hover {
-  color: var(--portfolio-accent);
-}
-
-.public-admin-link svg {
-  width: 0.8rem;
-  height: 0.8rem;
-}
-
 .public-hero {
   position: relative;
   min-height: 35rem;
@@ -514,7 +496,8 @@ body {
   font-size: 0.66rem;
 }
 
-.hero-terminal-actions a {
+.hero-terminal-actions a,
+.terminal-cv-download {
   display: inline-flex;
   min-height: 2.55rem;
   align-items: center;
@@ -526,16 +509,38 @@ body {
   font-size: 0.75rem;
 }
 
-.hero-terminal-actions a:first-child,
-.hero-terminal-actions a:hover {
+.hero-terminal-actions a:hover,
+.terminal-cv-download:hover {
   border-color: color-mix(in srgb, var(--portfolio-accent) 40%, transparent);
   background: var(--portfolio-accent-soft);
   color: var(--portfolio-accent);
 }
 
-.hero-terminal-actions svg {
+.hero-terminal-actions svg,
+.terminal-cv-download svg {
   width: 0.85rem;
   height: 0.85rem;
+}
+
+.terminal-cv-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-color: color-mix(in srgb, var(--portfolio-accent) 40%, transparent);
+  background: var(--portfolio-accent-soft);
+  color: var(--portfolio-accent);
+}
+
+.terminal-cv-download:focus-visible {
+  outline: 2px solid var(--portfolio-accent);
+  outline-offset: 3px;
+}
+
+.terminal-cv-download.is-unavailable {
+  cursor: not-allowed;
+  border-color: var(--portfolio-border);
+  background: transparent;
+  color: var(--portfolio-muted);
 }
 
 .public-eyebrow,
@@ -872,6 +877,21 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
+}
+
+/* A sole entry is a featured case history, not an empty half of the grid. */
+.experience-editorial--single {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.experience-editorial--single .experience-entry {
+  width: min(100%, 50rem);
+}
+
+/* Multiple entries retain the balanced two-column editorial grid. */
+.experience-editorial--multiple .experience-entry.is-current {
+  grid-column: auto;
 }
 
 .experience-entry {
@@ -1648,7 +1668,8 @@ body {
     width: 100%;
   }
 
-  .hero-terminal-actions a {
+  .hero-terminal-actions a,
+  .terminal-cv-download {
     flex: 1 1 12rem;
     justify-content: center;
   }

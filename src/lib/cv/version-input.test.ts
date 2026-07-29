@@ -6,7 +6,9 @@ import {
   cvVersionSavedMessage,
   cvPreviewPath,
   cvVersionInputSchema,
+  cvVersionUpdateInputSchema,
   databaseCuidSchema,
+  resolveCvVersionSelections,
   suggestUniqueCvVersionName,
 } from "./version-input";
 
@@ -68,6 +70,56 @@ test("create payload accepts real legacy portfolio IDs but CV IDs stay CUIDs", (
     }).success,
     true,
   );
+});
+
+test("metadata-only CV updates may omit selections without clearing them", () => {
+  const parsed = cvVersionUpdateInputSchema.parse({
+    id: firstId,
+    name: "Refined CV",
+    customHeadline: "Product-minded software engineer",
+    customSummary: "",
+    contactFields: ["email"],
+    sectionOrder: ["experience", "projects", "education", "skills"],
+    overridesJson: "{}",
+  });
+  const existing = {
+    selectedExperienceIds: ["legacy-experience"],
+    selectedProjectIds: ["legacy-project"],
+    selectedEducationIds: ["legacy-education"],
+    selectedSkillIds: ["legacy-skill"],
+    selectedCertificationIds: ["legacy-certification"],
+    selectedLanguageIds: ["legacy-language"],
+  };
+
+  const resolved = resolveCvVersionSelections(existing, parsed);
+  assert.deepEqual(resolved.selections, existing);
+  assert.deepEqual(resolved.submittedSelectionFields, []);
+});
+
+test("explicit selection arrays update only their own CV section, including intentional empties", () => {
+  const existing = {
+    selectedExperienceIds: ["experience-1"],
+    selectedProjectIds: ["project-1"],
+    selectedEducationIds: ["education-1"],
+    selectedSkillIds: ["skill-1"],
+    selectedCertificationIds: ["certification-1"],
+    selectedLanguageIds: ["language-1"],
+  };
+  const parsed = cvVersionUpdateInputSchema.parse({
+    id: firstId,
+    name: "General",
+    customHeadline: "",
+    customSummary: "",
+    selectedSkillIds: [],
+    contactFields: ["email"],
+    sectionOrder: ["experience"],
+    overridesJson: "{}",
+  });
+
+  const resolved = resolveCvVersionSelections(existing, parsed);
+  assert.deepEqual(resolved.selections.selectedSkillIds, []);
+  assert.deepEqual(resolved.selections.selectedExperienceIds, ["experience-1"]);
+  assert.deepEqual(resolved.submittedSelectionFields, ["selectedSkillIds"]);
 });
 
 test("existing preview routes accept a database CUID", () => {

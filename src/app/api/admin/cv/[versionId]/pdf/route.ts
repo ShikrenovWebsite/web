@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { requireAdminApi } from "@/lib/auth";
 import { getCvDocumentData } from "@/lib/cv/document";
-import { cvFilename, generateCvPdf } from "@/lib/cv/pdf";
+import { generateCvPdf } from "@/lib/cv/pdf";
+import { buildCvPdfFilename } from "@/lib/cv/filename";
 import { databaseCuidSchema } from "@/lib/cv/version-input";
 import { db } from "@/lib/db";
 
@@ -25,7 +26,10 @@ export async function GET(
     return Response.json({ error: "CV version not found." }, { status: 404 });
   }
   const generated = await generateCvPdf(data);
-  const filename = cvFilename(data.profile.fullName, data.version.name);
+  const filename = buildCvPdfFilename(
+    data.version.name,
+    data.profile.fullName,
+  );
   const checksum = createHash("sha256")
     .update(generated.bytes)
     .digest("hex");

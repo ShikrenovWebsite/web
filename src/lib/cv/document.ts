@@ -7,6 +7,7 @@ import {
   estimateCompactCvFit,
   type CvLayoutMode,
 } from "@/lib/cv/layout";
+import { flattenCvSkills } from "@/lib/cv/skills-layout";
 
 export type CvDocumentData = {
   version: {
@@ -58,7 +59,7 @@ export type CvDocumentData = {
     endDate: string;
     description: string;
   }>;
-  skills: Array<{ id: string; name: string; category: string }>;
+  skills: Array<{ id: string; name: string; category?: string }>;
   certifications: Array<{ id: string; name: string; issuer: string }>;
   languages: Array<{ id: string; name: string; proficiency: string }>;
   canonicalUpdatedAt: string;
@@ -296,11 +297,7 @@ export async function getCvDocumentData(userId: string, cvVersionId: string) {
       endDate: dateLabel(item.endDate),
       description: item.description ?? "",
     })),
-    skills: ordered(skills, version.selectedSkillIds).map((item) => ({
-      id: item.id,
-      name: item.name,
-      category: item.category ?? "",
-    })),
+    skills: flattenCvSkills(ordered(skills, version.selectedSkillIds)),
     certifications: ordered(
       certifications,
       version.selectedCertificationIds,

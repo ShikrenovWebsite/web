@@ -1,8 +1,16 @@
 import type { PublicExperience } from "./portfolio-types";
 
 export function ExperienceList({ items }: { items: PublicExperience[] }) {
+  const isSingleExperience = items.length === 1;
+
   return (
-    <div className="experience-editorial">
+    <div
+      className={`experience-editorial ${
+        isSingleExperience
+          ? "experience-editorial--single"
+          : "experience-editorial--multiple"
+      }`}
+    >
       {items.map((item, index) => (
         <article
           className={`experience-entry ${item.current ? "is-current" : ""}`}
@@ -27,7 +35,9 @@ export function ExperienceList({ items }: { items: PublicExperience[] }) {
               </ul>
             ) : null}
           </div>
-          {item.meta ? <time className="experience-date">{item.meta}</time> : null}
+          {item.meta ? (
+            <time className="experience-date">{item.meta}</time>
+          ) : null}
         </article>
       ))}
     </div>

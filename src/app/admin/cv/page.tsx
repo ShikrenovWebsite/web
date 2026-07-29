@@ -2,6 +2,7 @@ import { CvBuilder } from "@/components/admin/cv-builder";
 import { SectionHeading } from "@/components/admin/section-heading";
 import { requireAdminPage } from "@/lib/auth";
 import { canonicalUpdatedAtForUser } from "@/lib/cv/document";
+import { buildCvPdfFilename } from "@/lib/cv/filename";
 import { formatAdminDateTime } from "@/lib/date";
 import { db } from "@/lib/db";
 import {
@@ -159,7 +160,7 @@ export default async function CvBuilderPage() {
             canonicalUpdatedAt > version.sourceUpdatedAt,
           snapshots: version.snapshots.map((snapshot) => ({
             id: snapshot.id,
-            filename: snapshot.filename,
+            filename: buildCvPdfFilename(version.name, profile?.fullName),
             exportedAtLabel: formatAdminDateTime(snapshot.exportedAt),
             pageCount: snapshot.pageCount,
             checksumLabel: snapshot.checksum.slice(0, 12),

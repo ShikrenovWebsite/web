@@ -54,7 +54,7 @@ test("generates a selectable multi-page A4 PDF with a sensible filename", async 
   assert.ok(result.pageCount > 1);
   assert.equal(
     cvFilename(data.profile.fullName, data.version.name),
-    "petar-shikrenov-full-stack-developer-cv.pdf",
+    "Full-Stack-Developer-CV.pdf",
   );
   const parser = new PDFParse({ data: new Uint8Array(result.bytes) });
   const extracted = await parser.getText();
@@ -140,4 +140,44 @@ test("fits a focused realistic CV on one selectable-text A4 page", async () => {
   await parser.destroy();
   assert.match(extracted.text, /Selected Project 2/);
   assert.match(extracted.text, /Technical University/);
+  assert.ok(
+    extracted.text.indexOf("Selected Project 2") <
+      extracted.text.indexOf("Technical University"),
+  );
+  assert.match(extracted.text, /TypeScript \| Next\.js \| PostgreSQL/);
+});
+
+test("exports a CV when portfolio text includes unsupported emoji", async () => {
+  const data: CvDocumentData = {
+    version: {
+      id: "version-emoji",
+      name: "Software Engineer",
+      headline: "Product-minded software engineer",
+      summary: "Building reliable products.",
+      sectionOrder: ["skills"],
+      updatedAt: new Date(0).toISOString(),
+      sourceUpdatedAt: new Date(0).toISOString(),
+      newerDataAvailable: false,
+      layoutMode: "COMPACT_ONE_PAGE",
+      fit: { pressure: 0, likelyPages: 1, fitsOnePage: true },
+    },
+    profile: {
+      fullName: "Petar Shikrenov",
+      email: "petar@example.com",
+      phone: "",
+      location: "🗺 Sofia, Bulgaria",
+      website: "",
+      links: [],
+    },
+    experience: [],
+    projects: [],
+    education: [],
+    skills: [{ id: "skill-1", name: "TypeScript", category: "Languages" }],
+    certifications: [],
+    languages: [],
+    canonicalUpdatedAt: new Date(0).toISOString(),
+  };
+
+  const result = await generateCvPdf(data);
+  assert.ok(result.bytes.byteLength > 0);
 });

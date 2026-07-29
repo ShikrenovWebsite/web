@@ -60,6 +60,54 @@ export const cvVersionInputSchema = z.object({
 
 export type CvVersionInput = z.infer<typeof cvVersionInputSchema>;
 
+export const cvSelectionFieldNames = [
+  "selectedExperienceIds",
+  "selectedProjectIds",
+  "selectedEducationIds",
+  "selectedSkillIds",
+  "selectedCertificationIds",
+  "selectedLanguageIds",
+] as const;
+
+export type CvSelectionFieldName = (typeof cvSelectionFieldNames)[number];
+export type CvVersionSelections = Pick<CvVersionInput, CvSelectionFieldName>;
+
+// Editing a CV can be a metadata-only operation. Selection fields are optional
+// in that case so omitted values mean "preserve the stored relationships", not
+// "clear this section". Creation continues to use cvVersionInputSchema, where
+// every selection array is explicit.
+export const cvVersionUpdateInputSchema = cvVersionInputSchema.extend({
+  id: databaseCuidSchema,
+  selectedExperienceIds: cvVersionInputSchema.shape.selectedExperienceIds.optional(),
+  selectedProjectIds: cvVersionInputSchema.shape.selectedProjectIds.optional(),
+  selectedEducationIds: cvVersionInputSchema.shape.selectedEducationIds.optional(),
+  selectedSkillIds: cvVersionInputSchema.shape.selectedSkillIds.optional(),
+  selectedCertificationIds:
+    cvVersionInputSchema.shape.selectedCertificationIds.optional(),
+  selectedLanguageIds: cvVersionInputSchema.shape.selectedLanguageIds.optional(),
+});
+
+export type CvVersionUpdateInput = z.infer<typeof cvVersionUpdateInputSchema>;
+
+export function resolveCvVersionSelections(
+  existing: CvVersionSelections,
+  input: Pick<CvVersionUpdateInput, CvSelectionFieldName>,
+) {
+  const submittedSelectionFields: CvSelectionFieldName[] = [];
+  const resolved = {} as CvVersionSelections;
+
+  for (const field of cvSelectionFieldNames) {
+    if (Object.hasOwn(input, field) && input[field] !== undefined) {
+      submittedSelectionFields.push(field);
+      resolved[field] = [...input[field]];
+    } else {
+      resolved[field] = [...existing[field]];
+    }
+  }
+
+  return { selections: resolved, submittedSelectionFields };
+}
+
 export function suggestUniqueCvVersionName(
   requestedName: string,
   existingNames: Iterable<string>,

@@ -67,6 +67,7 @@ import {
   defaultCompactCvSelection,
   type CvLayoutMode,
 } from "@/lib/cv/layout";
+import { buildCvPdfFilename } from "@/lib/cv/filename";
 
 type RecordOption = { id: string; label: string; issues: string[] };
 type Options = {
@@ -118,6 +119,14 @@ type CvVersionView = {
   snapshots: ExportSnapshotView[];
   layoutMode: CvLayoutMode;
 };
+
+type CvSelectionField =
+  | "selectedExperienceIds"
+  | "selectedProjectIds"
+  | "selectedEducationIds"
+  | "selectedSkillIds"
+  | "selectedCertificationIds"
+  | "selectedLanguageIds";
 
 const SECTION_LABELS: Record<string, string> = {
   experience: "Experience",
@@ -314,7 +323,7 @@ function CvVersionForm({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(
-    version?.name ?? (profile.headline || "General"),
+    version?.name ?? (profile.fullName || "CV"),
   );
   const [headline, setHeadline] = useState(version?.customHeadline ?? "");
   const [summary, setSummary] = useState(version?.customSummary ?? "");
@@ -355,6 +364,15 @@ function CvVersionForm({
   const [overridesJson, setOverridesJson] = useState(
     version?.overridesJson ?? "{}",
   );
+  const [changedSelectionFields, setChangedSelectionFields] = useState<
+    Partial<Record<CvSelectionField, true>>
+  >({});
+
+  function markSelectionChanged(field: CvSelectionField) {
+    setChangedSelectionFields((current) =>
+      current[field] ? current : { ...current, [field]: true },
+    );
+  }
 
   function save() {
     startTransition(async () => {
@@ -363,12 +381,24 @@ function CvVersionForm({
         name,
         customHeadline: headline,
         customSummary: summary,
-        selectedExperienceIds: experience,
-        selectedProjectIds: projects,
-        selectedEducationIds: education,
-        selectedSkillIds: skills,
-        selectedCertificationIds: certifications,
-        selectedLanguageIds: languages,
+        ...(changedSelectionFields.selectedExperienceIds || !version
+          ? { selectedExperienceIds: experience }
+          : {}),
+        ...(changedSelectionFields.selectedProjectIds || !version
+          ? { selectedProjectIds: projects }
+          : {}),
+        ...(changedSelectionFields.selectedEducationIds || !version
+          ? { selectedEducationIds: education }
+          : {}),
+        ...(changedSelectionFields.selectedSkillIds || !version
+          ? { selectedSkillIds: skills }
+          : {}),
+        ...(changedSelectionFields.selectedCertificationIds || !version
+          ? { selectedCertificationIds: certifications }
+          : {}),
+        ...(changedSelectionFields.selectedLanguageIds || !version
+          ? { selectedLanguageIds: languages }
+          : {}),
         contactFields,
         layoutMode,
         sectionOrder,
@@ -376,6 +406,7 @@ function CvVersionForm({
       });
       if (result.success) {
         toast.success(result.message);
+        result.warnings?.forEach((warning) => toast.warning(warning));
         setOpen(false);
         if (!version && result.previewPath) {
           router.push(result.previewPath);
@@ -442,8 +473,15 @@ function CvVersionForm({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Label className="grid gap-1.5">
-              Version name
+              CV name
               <Input onChange={(event) => setName(event.target.value)} value={name} />
+              <span className="text-xs text-muted-foreground">
+                Used as the CV label and downloaded PDF filename. Downloaded
+                as: {" "}
+                <span className="font-mono text-foreground">
+                  {buildCvPdfFilename(name, profile.fullName)}
+                </span>
+              </span>
             </Label>
             <Label className="grid gap-1.5">
               Custom headline
@@ -558,37 +596,55 @@ function CvVersionForm({
           </fieldset>
           <SelectionGroup
             label="Experience"
-            onChange={setExperience}
+            onChange={(ids) => {
+              markSelectionChanged("selectedExperienceIds");
+              setExperience(ids);
+            }}
             options={options.experience}
             selected={experience}
           />
           <SelectionGroup
             label="Projects"
-            onChange={setProjects}
+            onChange={(ids) => {
+              markSelectionChanged("selectedProjectIds");
+              setProjects(ids);
+            }}
             options={options.projects}
             selected={projects}
           />
           <SelectionGroup
             label="Education"
-            onChange={setEducation}
+            onChange={(ids) => {
+              markSelectionChanged("selectedEducationIds");
+              setEducation(ids);
+            }}
             options={options.education}
             selected={education}
           />
           <SelectionGroup
             label="Skills"
-            onChange={setSkills}
+            onChange={(ids) => {
+              markSelectionChanged("selectedSkillIds");
+              setSkills(ids);
+            }}
             options={options.skills}
             selected={skills}
           />
           <SelectionGroup
             label="Certifications"
-            onChange={setCertifications}
+            onChange={(ids) => {
+              markSelectionChanged("selectedCertificationIds");
+              setCertifications(ids);
+            }}
             options={options.certifications}
             selected={certifications}
           />
           <SelectionGroup
             label="Languages"
-            onChange={setLanguages}
+            onChange={(ids) => {
+              markSelectionChanged("selectedLanguageIds");
+              setLanguages(ids);
+            }}
             options={options.languages}
             selected={languages}
           />

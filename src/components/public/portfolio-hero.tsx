@@ -1,4 +1,4 @@
-import { ArrowDownRight, Mail } from "lucide-react";
+import { FileDown } from "lucide-react";
 
 function TerminalEntry({
   command,
@@ -25,12 +25,14 @@ export function PortfolioHero({
   headline,
   location,
   email,
+  cvAvailable,
 }: {
   fullName: string;
   headline: string;
   introduction: string;
   location: string;
   email?: string;
+  cvAvailable: boolean;
 }) {
   return (
     <section className="public-hero" data-portfolio-section id="intro">
@@ -109,6 +111,27 @@ export function PortfolioHero({
                   Start a conversation
                 </a>
               ) : null}
+
+              {cvAvailable ? (
+                <a
+                  aria-label={`Download ${fullName} CV as PDF`}
+                  className="terminal-cv-download !min-h-14 !px-5 !text-xl md:!text-2xl"
+                  download
+                  href="/api/cv/download"
+                >
+                  <FileDown aria-hidden="true" />
+                  Download CV
+                </a>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className="terminal-cv-download is-unavailable !min-h-14 !px-5 !text-xl md:!text-2xl"
+                  title="CV currently unavailable"
+                >
+                  <FileDown aria-hidden="true" />
+                  Download CV — unavailable
+                </span>
+              )}
             </div>
           </div>
         </div>

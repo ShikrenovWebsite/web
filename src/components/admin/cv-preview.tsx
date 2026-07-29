@@ -1,4 +1,5 @@
 import type { CvDocumentData } from "@/lib/cv/document";
+import { flatCvSkillsText } from "@/lib/cv/skills-layout";
 import { cn } from "@/lib/utils";
 
 function SectionTitle({ children }: { children: string }) {
@@ -129,32 +130,28 @@ function Education({ data }: { data: CvDocumentData }) {
 
 function Skills({ data }: { data: CvDocumentData }) {
   if (!data.skills.length) return null;
-  const groups = data.skills.reduce<Record<string, string[]>>((result, skill) => {
-    const category = skill.category || "Skills";
-    result[category] = [...(result[category] ?? []), skill.name];
-    return result;
-  }, {});
   return (
     <section className="cv-section">
       <SectionTitle>Skills</SectionTitle>
-      <div className="space-y-[1.5mm]">
-        {Object.entries(groups).map(([category, skills]) => (
-          <p key={category}>
-            <strong>{category}</strong>
-            <br />
-            {skills.join(", ")}
-          </p>
-        ))}
-      </div>
+      <p className="leading-[1.45]">{flatCvSkillsText(data.skills)}</p>
     </section>
   );
 }
 
-function SecondarySections({ data }: { data: CvDocumentData }) {
+function SupportingSections({ data }: { data: CvDocumentData }) {
   return (
     <>
-      <Education data={data} />
-      <Skills data={data} />
+      <div
+        className={cn(
+          "grid items-start gap-[5mm]",
+          data.education.length && data.skills.length
+            ? "sm:grid-cols-[minmax(0,0.35fr)_minmax(0,0.65fr)]"
+            : "grid-cols-1",
+        )}
+      >
+        <Education data={data} />
+        <Skills data={data} />
+      </div>
       {data.certifications.length ? (
         <section className="cv-section">
           <SectionTitle>Certifications</SectionTitle>
@@ -214,7 +211,7 @@ export function CvPreview({ data }: { data: CvDocumentData }) {
             ) : null}
           </div>
           {contact.length ? (
-            <p className="max-w-[72mm] text-right text-[7.2pt] leading-[1.35]">
+          <p className="max-w-[88mm] text-right text-[7.2pt] leading-[1.35]">
               {contact.map((value, index) => (
                 <span key={value}>
                   {index ? " · " : ""}
@@ -237,27 +234,11 @@ export function CvPreview({ data }: { data: CvDocumentData }) {
         ) : null}
       </header>
 
-      <div
-        className={cn(
-          "grid items-start",
-          compact
-            ? "grid-cols-[minmax(0,1fr)_55mm] gap-[6mm]"
-            : "grid-cols-[minmax(0,1fr)_58mm] gap-[8mm]",
-        )}
-      >
-        <main className={compact ? "space-y-[4mm]" : "space-y-[6mm]"}>
-          <Experience data={data} />
-          <Projects data={data} />
-        </main>
-        <aside
-          className={cn(
-            "border-l border-neutral-300 pl-[5mm]",
-            compact ? "space-y-[4mm]" : "space-y-[6mm]",
-          )}
-        >
-          <SecondarySections data={data} />
-        </aside>
-      </div>
+      <main className={compact ? "space-y-[4mm]" : "space-y-[6mm]"}>
+        <Experience data={data} />
+        <Projects data={data} />
+        <SupportingSections data={data} />
+      </main>
     </article>
   );
 }

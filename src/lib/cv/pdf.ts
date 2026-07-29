@@ -8,10 +8,28 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import type { CvDocumentData } from "@/lib/cv/document";
+import { buildCvPdfFilename } from "@/lib/cv/filename";
+import { flatCvSkillsText } from "@/lib/cv/skills-layout";
 
 const A4 = { width: 595.28, height: 841.89 };
 
+// pdf-lib's built-in Helvetica font is WinAnsi encoded. Portfolio content can
+// contain emoji (for example a map pin copied into a location), so normalize
+// text at the rendering boundary instead of allowing one unsupported glyph to
+// abort an otherwise valid CV export.
+function pdfSafeText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2022\u00B7]/g, "|")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+}
+
 function wrap(text: string, font: PDFFont, size: number, width: number) {
+  text = pdfSafeText(text);
   function splitLongWord(word: string) {
     if (font.widthOfTextAtSize(word, size) <= width) return [word];
     const chunks: string[] = [];
@@ -66,9 +84,9 @@ export async function generateCvPdf(data: CvDocumentData) {
   const bodySize = compact ? 8.35 : 9.15;
   const lineHeight = bodySize * (compact ? 1.28 : 1.34);
   const contentWidth = A4.width - margin * 2;
-  const gap = compact ? 17 : 22;
-  const sideWidth = compact ? 156 : 164;
-  const mainWidth = contentWidth - gap - sideWidth;
+  const bottomGap = compact ? 13 : 17;
+  const educationWidth = (contentWidth - bottomGap) * 0.34;
+  const skillsWidth = contentWidth - bottomGap - educationWidth;
   const pages: PDFPage[] = [];
 
   function pageAt(index: number) {
@@ -102,7 +120,7 @@ export async function generateCvPdf(data: CvDocumentData) {
 
   const firstPage = pageAt(0);
   let headerY = A4.height - margin;
-  firstPage.drawText(data.profile.fullName || "Curriculum Vitae", {
+  firstPage.drawText(pdfSafeText(data.profile.fullName || "Curriculum Vitae"), {
     x: margin,
     y: headerY,
     size: compact ? 22 : 23,
@@ -111,7 +129,7 @@ export async function generateCvPdf(data: CvDocumentData) {
   });
   headerY -= compact ? 17 : 19;
   if (data.version.headline) {
-    firstPage.drawText(data.version.headline, {
+    firstPage.drawText(pdfSafeText(data.version.headline), {
       x: margin,
       y: headerY,
       size: compact ? 10.25 : 11,
@@ -126,7 +144,7 @@ export async function generateCvPdf(data: CvDocumentData) {
     data.profile.location,
     data.profile.website,
     ...data.profile.links,
-  ].filter(Boolean);
+  ].filter(Boolean).map(pdfSafeText);
   const contactWidth = compact ? 210 : 225;
   const contactRows: string[][] = [];
   let currentRow: string[] = [];
@@ -216,15 +234,9 @@ export async function generateCvPdf(data: CvDocumentData) {
     pageIndex: number;
     y: number;
   };
-  const main: Writer = {
+  const content: Writer = {
     x: margin,
-    width: mainWidth,
-    pageIndex: 0,
-    y: contentStartY,
-  };
-  const side: Writer = {
-    x: margin + mainWidth + gap,
-    width: sideWidth,
+    width: contentWidth,
     pageIndex: 0,
     y: contentStartY,
   };
@@ -329,8 +341,46 @@ export async function generateCvPdf(data: CvDocumentData) {
     }
   }
 
+  function educationHeight(width: number) {
+    return data.education.reduce((height, item) => {
+      const title =
+        [item.qualification, item.fieldOfStudy].filter(Boolean).join(", ") ||
+        item.institution;
+      return (
+        height +
+        measureText(title, width, bodySize, bold) +
+        (item.qualification || item.fieldOfStudy
+          ? measureText(item.institution, width)
+          : 0) +
+        measureText(
+          [item.startDate, item.endDate].filter(Boolean).join(" - "),
+          width,
+          7,
+        ) +
+        (item.description ? measureText(item.description, width) : 0) +
+        (compact ? 5 : 8)
+      );
+    }, compact ? 31 : 36);
+  }
+
+  function skillsHeight(width: number) {
+    return (
+      (compact ? 31 : 36) +
+      measureText(flatCvSkillsText(data.skills), width, bodySize)
+    );
+  }
+
+  const canUseBottomColumns =
+    data.education.length > 0 &&
+    data.skills.length > 0 &&
+    Math.max(educationHeight(educationWidth), skillsHeight(skillsWidth)) <=
+      A4.height - margin * 2;
+  const bottomBlockHeight = canUseBottomColumns
+    ? Math.max(educationHeight(educationWidth), skillsHeight(skillsWidth))
+    : educationHeight(content.width) + skillsHeight(content.width);
+
   if (data.experience.length) {
-    section(main, "Experience", 44);
+    section(content, "Experience", 44);
     for (const item of data.experience) {
       const metadata = [
         item.location,
@@ -339,23 +389,23 @@ export async function generateCvPdf(data: CvDocumentData) {
         .filter(Boolean)
         .join(" | ");
       const itemHeight =
-        measureText(`${item.role} - ${item.company}`, main.width, bodySize, bold) +
-        measureText(metadata, main.width, compact ? 7.3 : 7.8) +
-        measureText(item.description, main.width) +
+        measureText(`${item.role} - ${item.company}`, content.width, bodySize, bold) +
+        measureText(metadata, content.width, compact ? 7.3 : 7.8) +
+        measureText(item.description, content.width) +
         item.highlights.reduce(
           (height, value) =>
-            height + measureText(value, main.width - 11) + 1,
+            height + measureText(value, content.width - 11) + 1,
           0,
         ) +
         (compact ? 7 : 10);
-      ensure(main, itemHeight);
-      drawWrapped(main, `${item.role} - ${item.company}`, {
+      ensure(content, itemHeight);
+      drawWrapped(content, `${item.role} - ${item.company}`, {
         font: bold,
         gapAfter: 1,
         ensureSpace: false,
       });
       if (metadata) {
-        drawWrapped(main, metadata, {
+        drawWrapped(content, metadata, {
           size: compact ? 7.3 : 7.8,
           color: rgb(0.35, 0.35, 0.35),
           gapAfter: 2,
@@ -363,86 +413,90 @@ export async function generateCvPdf(data: CvDocumentData) {
         });
       }
       if (item.description) {
-        drawWrapped(main, item.description, {
+        drawWrapped(content, item.description, {
           gapAfter: 2,
           ensureSpace: false,
         });
       }
-      bullets(main, item.highlights);
-      main.y -= compact ? 5 : 8;
+      bullets(content, item.highlights);
+      content.y -= compact ? 5 : 8;
     }
   }
 
   if (data.projects.length) {
-    section(main, "Selected projects", 40);
-    for (const item of data.projects) {
+    section(content, "Selected projects", 40);
+    for (const [projectIndex, item] of data.projects.entries()) {
       const itemHeight =
-        measureText(item.title, main.width, bodySize, bold) +
-        measureText(item.shortDescription, main.width) +
-        measureText(item.longDescription, main.width) +
+        measureText(item.title, content.width, bodySize, bold) +
+        measureText(item.shortDescription, content.width) +
+        measureText(item.longDescription, content.width) +
         measureText(
           item.technologies.length
             ? `Stack: ${item.technologies.join(", ")}`
             : "",
-          main.width,
+          content.width,
           compact ? 7.3 : 7.8,
         ) +
         item.highlights.reduce(
           (height, value) =>
-            height + measureText(value, main.width - 11) + 1,
+            height + measureText(value, content.width - 11) + 1,
           0,
         ) +
         (compact ? 9 : 12);
-      ensure(main, itemHeight);
-      drawWrapped(main, item.title, {
+      // Keep the last project with the final supporting block when both fit
+      // on a fresh page. This avoids an almost-empty final page of skills.
+      const reserveForSupportingBlock =
+        projectIndex === data.projects.length - 1 ? bottomBlockHeight : 0;
+      ensure(content, itemHeight + reserveForSupportingBlock);
+      drawWrapped(content, item.title, {
         font: bold,
         gapAfter: 1,
         ensureSpace: false,
       });
       if (item.shortDescription) {
-        drawWrapped(main, item.shortDescription, { ensureSpace: false });
+        drawWrapped(content, item.shortDescription, { ensureSpace: false });
       }
       if (item.longDescription) {
-        drawWrapped(main, item.longDescription, {
+        drawWrapped(content, item.longDescription, {
           gapAfter: 2,
           ensureSpace: false,
         });
       }
-      bullets(main, item.highlights);
+      bullets(content, item.highlights);
       if (item.technologies.length) {
-        drawWrapped(main, `Stack: ${item.technologies.join(", ")}`, {
+        drawWrapped(content, `Stack: ${item.technologies.join(" | ")}`, {
           size: compact ? 7.3 : 7.8,
           gapAfter: 2,
           ensureSpace: false,
         });
       }
       for (const url of [item.liveUrl, item.sourceCodeUrl].filter(Boolean)) {
-        drawWrapped(main, url, {
+        drawWrapped(content, url, {
           size: 6.8,
           color: rgb(0.1, 0.2, 0.45),
           link: url,
           ensureSpace: false,
         });
       }
-      main.y -= compact ? 5 : 8;
+      content.y -= compact ? 5 : 8;
     }
   }
 
-  if (data.education.length) {
-    section(side, "Education", 34);
+  function drawEducation(writer: Writer) {
+    section(writer, "Education", 34);
     for (const item of data.education) {
-      ensure(side, 34);
+      ensure(writer, 34);
       drawWrapped(
-        side,
+        writer,
         [item.qualification, item.fieldOfStudy].filter(Boolean).join(", ") ||
           item.institution,
         { font: bold, ensureSpace: false },
       );
       if (item.qualification || item.fieldOfStudy) {
-        drawWrapped(side, item.institution, { ensureSpace: false });
+        drawWrapped(writer, item.institution, { ensureSpace: false });
       }
       drawWrapped(
-        side,
+        writer,
         [item.startDate, item.endDate].filter(Boolean).join(" - "),
         {
           size: 7,
@@ -452,7 +506,7 @@ export async function generateCvPdf(data: CvDocumentData) {
         },
       );
       if (item.description) {
-        drawWrapped(side, item.description, {
+        drawWrapped(writer, item.description, {
           gapAfter: compact ? 5 : 8,
           ensureSpace: false,
         });
@@ -460,34 +514,53 @@ export async function generateCvPdf(data: CvDocumentData) {
     }
   }
 
-  if (data.skills.length) {
-    section(side, "Skills", 30);
-    const categories = new Map<string, typeof data.skills>();
-    for (const skill of data.skills) {
-      const category = skill.category || "Skills";
-      categories.set(category, [...(categories.get(category) ?? []), skill]);
-    }
-    for (const [category, skills] of categories) {
-      drawWrapped(side, category, { font: bold, ensureSpace: true });
-      drawWrapped(side, skills.map((skill) => skill.name).join(", "), {
-        gapAfter: compact ? 4 : 6,
-      });
-    }
+  function drawSkills(writer: Writer) {
+    section(writer, "Skills", 30);
+    drawWrapped(writer, flatCvSkillsText(data.skills), {
+      gapAfter: compact ? 4 : 6,
+    });
+  }
+
+  if (canUseBottomColumns) {
+    const bottomHeight = Math.max(
+      educationHeight(educationWidth),
+      skillsHeight(skillsWidth),
+    );
+    ensure(content, bottomHeight);
+    const educationWriter: Writer = {
+      x: content.x,
+      width: educationWidth,
+      pageIndex: content.pageIndex,
+      y: content.y,
+    };
+    const skillsWriter: Writer = {
+      x: content.x + educationWidth + bottomGap,
+      width: skillsWidth,
+      pageIndex: content.pageIndex,
+      y: content.y,
+    };
+    drawEducation(educationWriter);
+    drawSkills(skillsWriter);
+    content.pageIndex = Math.max(educationWriter.pageIndex, skillsWriter.pageIndex);
+    content.y = Math.min(educationWriter.y, skillsWriter.y);
+  } else {
+    if (data.education.length) drawEducation(content);
+    if (data.skills.length) drawSkills(content);
   }
 
   if (data.certifications.length) {
-    section(side, "Certifications", 24);
+    section(content, "Certifications", 24);
     for (const item of data.certifications) {
-      drawWrapped(side, [item.name, item.issuer].filter(Boolean).join(" - "), {
+      drawWrapped(content, [item.name, item.issuer].filter(Boolean).join(" - "), {
         gapAfter: 2,
       });
     }
   }
 
   if (data.languages.length) {
-    section(side, "Languages", 20);
+    section(content, "Languages", 20);
     drawWrapped(
-      side,
+      content,
       data.languages
         .map((item) =>
           [item.name, item.proficiency].filter(Boolean).join(" - "),
@@ -497,17 +570,8 @@ export async function generateCvPdf(data: CvDocumentData) {
   }
 
   for (let index = 0; index < pages.length; index += 1) {
-    pages[index].drawLine({
-      start: {
-        x: margin + mainWidth + gap / 2,
-        y: index === 0 ? contentStartY : A4.height - margin,
-      },
-      end: { x: margin + mainWidth + gap / 2, y: margin },
-      thickness: 0.35,
-      color: rgb(0.78, 0.78, 0.78),
-    });
     if (index === 0) continue;
-    pages[index].drawText(`${data.profile.fullName} · ${data.version.headline}`, {
+    pages[index].drawText(pdfSafeText(`${data.profile.fullName} | ${data.version.headline}`), {
       x: margin,
       y: A4.height - margin + 10,
       size: 7,
@@ -521,10 +585,5 @@ export async function generateCvPdf(data: CvDocumentData) {
 }
 
 export function cvFilename(fullName: string, versionName: string) {
-  const slug = `${fullName}-${versionName}`
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${slug || "portfolio"}-cv.pdf`;
+  return buildCvPdfFilename(versionName, fullName);
 }
